@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Chat Example</title>
+    <script type="text/javascript">
+        window.onload = function () {
+            var conn;
+            var hub_lists = []
+            var msg = document.getElementById("msg");
+            var log = document.getElementById("log");
+            var list = document.getElementById("list")
+
+            function appendLog(item) {
+                var doScroll = log.scrollTop > log.scrollHeight - log.clientHeight - 1;
+                log.appendChild(item);
+                if (doScroll) {
+                    log.scrollTop = log.scrollHeight - log.clientHeight;
+                }
+            }
+
+            document.getElementById("createHub").onclick = function () {
+                fetch('/newhub')
+                    .then(response => {
+                        if (!response.ok) throw new Error(response.statusText || 'Request failed');
+                        return response.text();
+                    })
+                    .then(response => {
+                        var item = document.createElement("div")
+                        item.id = "hubItem"
+                        item.innerText = response
+                        item.addEventListener("click", function (e) {
+                            console.log("hello")
+                        })
+                        list.append(item)
+                    })
+                    .catch(err => {
+                        var item = document.createElement("div");
+                        item.innerText = "Error creating hub: " + err.message;
+                        appendLog(item);
+                    });
+            }
+
+            document.getElementById("disButton").onclick = function () {
+                const urlParams = new URLSearchParams(window.location.search);
+                const hubId = urlParams.get('hub') || '';
+                fetch('/disconnect/?hub=' + hubId + '&client=test')
+                    .then(response => {
+                        if (!response.ok) throw new Error(response.statusText || 'Request failed');
+                        return response.text();
+                    })
+                    .then(response => {
+                        console.log("diconnected")
+                    })
+                    .catch(err => {
+                        var item = document.createElement("div");
+                        item.innerText = "Error creating hub: " + err.message;
+                        appendLog(item);
+                    });
+            }
+
+            document.getElementById("listHub").onclick = function () {
+                fetch('/hublist')
+                    .then(response => {
+                        if (!response.ok) throw new Error(response.statusText || "Request failed");
+                        return response.text();
+                    })
+                    .then(response => {
+                        // remove existing hubItem divs
+                        document.querySelectorAll('div#hubItem').forEach(el => el.remove());
+                        id_list = response.split(",")
+                        id_list.forEach(element => {
+                            var item = document.createElement("div")
+                            item.id = "hubItem"
+                            item.innerText = element
+                            item.addEventListener("click", function (e) {
+                                //diconnect client
+
+                                // Get hub ID from URL or use default
+                                const hubId = item.innerText
+                                conn = new WebSocket("ws://" + document.location.host + "/ws?hub=" + hubId);
+                                conn.onclose = function (evt) {
+                                    var item = document.createElement("div");
+                                    item.innerHTML = "<b>Connection closed.</b>";
+                                    appendLog(item);
+                                };
+                                conn.onmessage = function (evt) {
+                                    var messages = evt.data.split('\n');
+                                    for (var i = 0; i < messages.length; i++) {
+                                        var item = document.createElement("div");
+                                        item.innerText = messages[i];
+                                        appendLog(item);
+                                    }
+                                };
+                            })
+                            list.append(item)
+                        });
+                    })
+            }
+
+            document.getElementById("form").onsubmit = function () {
+                if (!conn) {
+                    return false;
+                }
+                if (!msg.value) {
+                    return false;
+                }
+                conn.send(msg.value);
+                msg.value = "";
+                return false;
+            };
+
+            if (window["WebSocket"]) {
+                // Get hub ID from URL or use default
+                const urlParams = new URLSearchParams(window.location.search);
+                const hubId = urlParams.get('hub') || '';
+
+                conn = new WebSocket("ws://" + document.location.host + "/ws?hub=" + hubId);
+                conn.onclose = function (evt) {
+                    var item = document.createElement("div");
+                    item.innerHTML = "<b>Connection closed.</b>";
+                    appendLog(item);
+                };
+                conn.onmessage = function (evt) {
+                    var messages = evt.data.split('\n');
+                    for (var i = 0; i < messages.length; i++) {
+                        var item = document.createElement("div");
+                        item.innerText = messages[i];
+                        appendLog(item);
+                    }
+                };
+            } else {
+                var item = document.createElement("div");
+                item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+                appendLog(item);
+            }
+        };
+    </script>
+    <style type="text/css">
+        html {
+            overflow: hidden;
+        }
+
+        body {
+            overflow: hidden;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: gray;
+        }
+
+        #log {
+            background: white;
+            margin: 0;
+            padding: 0.5em 0.5em 0.5em 0.5em;
+            position: absolute;
+            top: 0.5em;
+            left: 0.5em;
+            right: 0.5em;
+            bottom: 3em;
+            overflow: auto;
+        }
+
+        #form {
+            padding: 0 0.5em 0 0.5em;
+            margin: 0;
+            position: absolute;
+            bottom: 1em;
+            left: 0px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+    </style>
+</head>
+
+<body>
+    <div id="log" style="position:absolute; top:0.5em; left:0.5em; bottom:3em; right:25%; overflow:auto; background:white; padding:0.5em;"></div>
+
+    <div id="list" style="position:absolute; top:0.5em; right:0.5em; bottom:3em; width:24%; background:#f7f7f7; padding:0.5em; overflow:auto; border-left:1px solid #ddd;">
+        <h3 style="margin:0 0 0.5em 0; font-size:1em;">Hubs</h3>
+        <div id="hubItems"></div>
+    </div>
+    <form id="form">
+        <input type="submit" value="Send" />
+        <input type="text" id="msg" size="64" autofocus />
+        <button type="button" id="createHub">Create new hub</button>
+        <button type="button" id="listHub">Refresh list</button>
+        <button type="button" id="disButton">Diconnect</button>
+    </form>
+</body>
+
+</html>
