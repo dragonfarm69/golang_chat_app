@@ -15,7 +15,7 @@ type Message struct {
 type Hub struct {
 	hub_id      string
 	messages    []Message
-	clients     map[*Client]bool //create a map with key value pairs --- Client - bool
+	Clients     map[*Client]bool //create a map with key value pairs --- Client - bool
 	broadcaster chan []byte
 
 	register     chan *Client
@@ -30,6 +30,25 @@ type HubManager struct {
 func newHubManager() *HubManager {
 	return &HubManager{
 		hubs: make(map[uuid.UUID]*Hub),
+	}
+}
+
+func (h *Hub) getClientbyId(clientId string) *Client {
+	for client := range h.Clients {
+		if client.id == clientId {
+			return client
+		}
+	}
+
+	return nil
+}
+
+func (hm *HubManager) unregisterFromAll(client *Client) {
+	for _, hub := range hm.hubs {
+		select {
+		case hub.unregister <- client:
+		default:
+		}
 	}
 }
 
@@ -69,7 +88,7 @@ func newHub(id string) *Hub {
 	return &Hub{
 		hub_id:       id,
 		messages:     make([]Message, 0),
-		clients:      make(map[*Client]bool),
+		Clients:      make(map[*Client]bool),
 		broadcaster:  make(chan []byte),
 		register:     make(chan *Client),
 		unregister:   make(chan *Client),
@@ -85,7 +104,7 @@ func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.clients[client] = true
+			h.Clients[client] = true
 
 			for _, msg := range h.messages {
 				select {
@@ -95,19 +114,21 @@ func (h *Hub) run() {
 				}
 			}
 		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
+			if _, ok := h.Clients[client]; ok {
+				delete(h.Clients, client)
+
+				h.broadcaster <- []byte("a client has left")
 			}
 		case id := <-h.unregisterId:
-			for client := range h.clients {
+			for client := range h.Clients {
 				if client.id == id {
 					close(client.send)
-					delete(h.clients, client)
+					delete(h.Clients, client)
 					break
 				}
 			}
 		case message := <-h.broadcaster:
-			for client := range h.clients {
+			for client := range h.Clients {
 				select {
 				case client.send <- message:
 					//store message
@@ -117,7 +138,7 @@ func (h *Hub) run() {
 					})
 				default:
 					close(client.send)
-					delete(h.clients, client)
+					delete(h.Clients, client)
 				}
 			}
 		}

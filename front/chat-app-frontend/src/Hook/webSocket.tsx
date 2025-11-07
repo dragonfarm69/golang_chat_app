@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import messagePayload from "../Payload/messagePayload";
 
-function useWs(url: string) {
+function useWs(url: string, onMessage: (msg: string) => void) {
     const [messages, setMessages] = useState<string[]>([]);
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [connection, setConnection] = useState(false);
+    const onMessageRef = useRef(onMessage);
+    onMessageRef.current = onMessage;
 
     useEffect(() => {
         const ws = new WebSocket(url);
@@ -19,9 +22,13 @@ function useWs(url: string) {
         }
 
         ws.onmessage = (event) => {
-            setMessages((prev) => [...prev, event.data])
+            const messages = event.data.split('\n');
+            messages.forEach((msg: string) => {
+                if (msg.trim()) {
+                    onMessageRef.current(msg);
+                }
+            });
             console.log(event.data)
-            console.log("sendinfg something")
         }
 
         ws.onerror = () => {
@@ -33,9 +40,9 @@ function useWs(url: string) {
         return () => ws.close();
     }, [url]);
 
-    const sendMessage = (msg: string) => {
+    const sendMessage = (msg: messagePayload) => {
         if (socket && connection) {
-            socket.send(msg);
+            socket.send(JSON.stringify(msg));
         }
     }
 

@@ -9,19 +9,18 @@ function JoinRoomPage({ onJoin }: { onJoin: (roomId: string) => void}) {
             return;
         }
         
-        // try {
-        //     const response = await fetch(`http://localhost:8080/join?hub=${roomId}`);
-        //     if (response.ok) {
-        //         onJoin(roomId);
-        //     } else {
-        //         const error = await response.text();
-        //         alert(`ERROR: ${error}`);
-        //     }
-        // }
-        // catch (error) {
-        //     console.error("SOMETHING IS WRONG", error);
-        // }
-        onJoin(roomId)
+        try {
+            const response = await fetch(`http://localhost:8080/join?hub=${roomId}&client=test`);
+            if (response.ok) {
+                onJoin(roomId);
+            } else {
+                const error = await response.text();
+                alert(`ERROR: ${error}`);
+            }
+        }
+        catch (error) {
+            console.error("SOMETHING IS WRONG", error);
+        }
     }
 
     return (

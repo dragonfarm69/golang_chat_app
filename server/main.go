@@ -4,6 +4,8 @@ import (
 	"flag"
 	"log"
 	"net/http"
+
+	"github.com/rs/cors"
 )
 
 var addr = flag.String("addr", ":8080", "chat server service")
@@ -28,29 +30,31 @@ func main() {
 	// hub := newHub()
 	// go hub.run()
 
+	mux := http.NewServeMux()
+
 	hubManager.createNewHub("temp name")
-	http.HandleFunc("/", serveMainHtml)
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		hubId := r.URL.Query().Get("hub")
+	mux.HandleFunc("/", serveMainHtml)
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		// hubId := r.URL.Query().Get("hub")
 
-		if hubId == "" {
-			http.Error(w, "404 Not found", http.StatusNotFound)
-			return
-		}
+		// if hubId == "" {
+		// 	http.Error(w, "404 Not found", http.StatusNotFound)
+		// 	return
+		// }
 
-		hub := hubManager.getHub(hubId)
-		if hub == nil {
-			http.Error(w, "404 Not found", http.StatusNotFound)
-			return
-		}
+		// hub := hubManager.getHub(hubId)
+		// if hub == nil {
+		// 	http.Error(w, "404 Not found", http.StatusNotFound)
+		// 	return
+		// }
 
-		serveWs(hub, w, r)
+		serveWs(hubManager, w, r)
 	})
-	http.HandleFunc("/newhub", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/newhub", func(w http.ResponseWriter, r *http.Request) {
 		hub_id := hubManager.createNewHub("temp")
 		w.Write([]byte(hub_id))
 	})
-	http.HandleFunc("/hublist", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/hublist", func(w http.ResponseWriter, r *http.Request) {
 		lists := hubManager.getHubListIds()
 		s := ""
 		for i, id := range lists {
@@ -61,7 +65,7 @@ func main() {
 		}
 		w.Write([]byte(s))
 	})
-	http.HandleFunc("/disconnect/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/disconnect/", func(w http.ResponseWriter, r *http.Request) {
 		log.Print("diconnecting")
 		hubId := r.URL.Query().Get("hub")
 		clientId := r.URL.Query().Get("client")
@@ -81,8 +85,35 @@ func main() {
 
 		hub.disconnectClient(clientId)
 	})
+	mux.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
+		hubId := r.URL.Query().Get("hub")
+		clientId := r.URL.Query().Get("client")
 
-	err := http.ListenAndServe(*addr, nil)
+		if hubId == "" || clientId == "" {
+			http.Error(w, "Can't be empty", http.StatusNotFound)
+			return
+		}
+
+		hub := hubManager.getHub(hubId)
+		if hub == nil {
+			http.Error(w, "404 Not found", http.StatusNotFound)
+			return
+		}
+
+		// hub.disconnectClient(clientId)
+		// serveWs(hub, w, r)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	//Configure CORS
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"}, // Allow all origins
+		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders: []string{"*"},
+	})
+	handler := c.Handler(mux)
+
+	err := http.ListenAndServe(*addr, handler)
 	if err != nil {
 		log.Fatal("error when starting server: ", err)
 	}

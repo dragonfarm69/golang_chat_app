@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -23,12 +24,17 @@ type Client struct {
 	// name string
 	id string
 
-	hub *Hub
+	// hub *Hub
+	hubs *HubManager
 
 	connection *websocket.Conn
-
 	//outbound messages buffered channel
 	send chan []byte
+}
+
+type IncomingMessage struct {
+	HubId   string `json:"hubId"`
+	Content string `json:"content"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -42,8 +48,9 @@ var upgrader = websocket.Upgrader{
 
 func (c *Client) handleIncomingMessages() {
 	defer func() {
-		c.hub.broadcaster <- []byte("a client has left")
-		c.hub.unregister <- c
+		// c.hub.broadcaster <- []byte("a client has left")
+		// c.hub.unregister <- c
+		c.hubs.unregisterFromAll(c)
 		c.connection.Close()
 	}()
 	c.connection.SetReadLimit(maxMessageSize)
@@ -58,8 +65,23 @@ func (c *Client) handleIncomingMessages() {
 		}
 		log.Println("message:", string(message))
 
-		//broadcast message to all users in the same hub
-		c.hub.broadcaster <- message
+		//Get message destination by parsing json
+		var msg IncomingMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Println("Error when parsing message: ", err)
+			continue
+		}
+
+		hub := c.hubs.getHub(msg.HubId)
+		if hub != nil {
+			//register client to that hub if not found
+			if _, ok := hub.Clients[c]; !ok {
+				hub.register <- c
+			}
+			hub.broadcaster <- []byte(msg.Content)
+		} else {
+			log.Printf("Hub not found: %s", msg.HubId)
+		}
 	}
 }
 
@@ -107,9 +129,9 @@ func (c *Client) handleOutgoingMessages() {
 	}
 }
 
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func serveWs(hub *HubManager, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
-	var join_message = []byte("a new client has joined")
+	// var join_message = []byte("a new client has joined")
 
 	if err != nil {
 		log.Println(err)
@@ -117,10 +139,12 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a new client
-	client := &Client{id: "test", hub: hub, connection: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client
-	client.hub.broadcaster <- join_message
+	client := &Client{id: "test", hubs: hub, connection: conn, send: make(chan []byte, 256)}
+	// client.hub.register <- client
+	// client.hub.broadcaster <- join_message
 
 	go client.handleIncomingMessages()
 	go client.handleOutgoingMessages()
+
+	log.Printf("New client connected: %s", client.id)
 }
