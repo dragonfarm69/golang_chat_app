@@ -36,6 +36,11 @@ func main() {
 	mux.HandleFunc("/", serveMainHtml)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		// hubId := r.URL.Query().Get("hub")
+		client_name := r.URL.Query().Get("username")
+		if client_name == "" {
+			http.Error(w, "Unknown User", http.StatusBadRequest)
+			return
+		}
 
 		// if hubId == "" {
 		// 	http.Error(w, "404 Not found", http.StatusNotFound)
@@ -48,7 +53,7 @@ func main() {
 		// 	return
 		// }
 
-		serveWs(hubManager, w, r)
+		serveWs(hubManager, w, r, client_name)
 	})
 	mux.HandleFunc("/newhub", func(w http.ResponseWriter, r *http.Request) {
 		hub_id := hubManager.createNewHub("temp")

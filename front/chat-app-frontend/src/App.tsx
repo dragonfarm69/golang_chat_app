@@ -5,14 +5,20 @@ import JoinRoomPage from "./Pages/JoinRoom/joinMain";
 
 function App() {
   const [roomId, setRoom] = useState<string | null>(null);
+  const [clientName, setClientName] = useState<string | null>("");
 
-  if (roomId) {
-    return <ChatPage roomId={roomId} />;
+  const handleJoin = (newRoomId: string, currentClientName: string) => {
+    setRoom(newRoomId);
+    setClientName(currentClientName)
+  };
+
+  if (roomId && clientName) {
+    return <ChatPage roomId={roomId} clientName={clientName} />;
   }
 
   return (
     // <ChatMain />
-    <JoinRoomPage onJoin={setRoom}/>
+    <JoinRoomPage onJoin={handleJoin}/>
   );
 }
 

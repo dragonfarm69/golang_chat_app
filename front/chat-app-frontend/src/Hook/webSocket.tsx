@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import messagePayload from "../Payload/messagePayload";
 
-function useWs(url: string, onMessage: (msg: string) => void) {
+function useWs<T>(url: string, onMessage: (msg: T) => void) {
     const [messages, setMessages] = useState<string[]>([]);
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [connection, setConnection] = useState(false);
@@ -22,10 +22,18 @@ function useWs(url: string, onMessage: (msg: string) => void) {
         }
 
         ws.onmessage = (event) => {
+            console.log("event: ", event)
             const messages = event.data.split('\n');
             messages.forEach((msg: string) => {
                 if (msg.trim()) {
-                    onMessageRef.current(msg);
+                    console.log("message: ", msg)
+                    try {
+                        const parsedData = JSON.parse(msg);
+                        onMessageRef.current(parsedData);
+                    } catch (e) {
+                        console.error("Failed to parse JSON: ", e)
+                        // onMessageRef.current(msg);
+                    }
                 }
             });
             console.log(event.data)

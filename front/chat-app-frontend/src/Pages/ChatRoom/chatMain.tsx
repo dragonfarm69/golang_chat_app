@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // import { invoke } from "@tauri-apps/api/core";
 import "../../App.css";
 import reactImg from '../../assets/react.svg'
+import { useUser } from "../../Context/userContext";
 import LogData from "../../Modules/messageModule";
 import useWs from "../../Hook/webSocket";
 import messagePayload from "../../Payload/messagePayload";
@@ -29,18 +30,31 @@ function useHover() {
     return { ref, isHovered }
 }
 
-function ChatPage({ roomId }: { roomId: string }) {
+function ChatPage({ roomId, clientName }: { roomId: string, clientName: string }) {
+    const {user} = useUser()
     const { ref, isHovered } = useHover();
     const [logs, setLogs] = useState<LogData[]>([]);
     const [hubs, setHubs] = useState<string[]>([]);
     const [message, setMessage] = useState("");
 
-    const { connection, messages, sendMessage } = useWs(`ws://localhost:8080/ws?hub=${roomId}`, (msg) => {
-        addLog("server", msg)
-    })
+    interface wsMessage {
+        username: string;
+        content: string;
+    }
+
+    const { connection, messages, sendMessage } = useWs<wsMessage>(`ws://localhost:8080/ws?hub=${roomId}&username=${clientName}`, (msg) => {
+        console.log("test: ", msg)
+        try {
+            // const message: wsMessage = JSON.parse(msg)
+            addLog(msg.username, "server", msg.content)
+        } catch (err) {
+            console.error("Failed to parse WS message: ", err)
+        }
+    });
 
 
     const LogItem = ({ data }: { data: LogData }) => {
+        // console.log(data)
         return (
             <div className="log-item" style={{ display: "flex", margin: "5px", gap: "10px" }}>
                 {/* <div className="profile-picture">{data.profile}</div> */}
@@ -50,6 +64,7 @@ function ChatPage({ roomId }: { roomId: string }) {
                     <div className="profile-img" style={{ backgroundImage: `url(${reactImg})` }}></div>
                 </div>
                 <div style={{ display: "block" }}>
+                    <div className="username">{data.username}</div>
                     <div className="content">{data.message}</div>
                     <div className="timestamp">{data.timestamp.toLocaleTimeString()}</div>
                 </div>
@@ -57,14 +72,17 @@ function ChatPage({ roomId }: { roomId: string }) {
         );
     }
 
-    const addLog = useCallback((profile: string, message: string) => {
-        const newLog: LogData = {
-            profile,
-            id: Date.now().toString(),
-            message,
-            timestamp: new Date(),
-        };
-        setLogs(prev => [...prev, newLog]);
+    const addLog = useCallback((username: string, profile: string, message: string) => {
+        if (user?.name) {
+            const newLog: LogData = {
+                username: username,
+                profile,
+                id: Date.now().toString(),
+                message,
+                timestamp: new Date(),
+            };
+            setLogs(prev => [...prev, newLog]);
+        }
     }, []);
 
     return (
@@ -106,8 +124,9 @@ function ChatPage({ roomId }: { roomId: string }) {
             {/* Form */}
             <form className="form-container" onSubmit={(e) => { e.preventDefault() }}>
                 <button type="button" onClick={() => {
-                    if (message.trim()) {
+                    if (message.trim() && user?.name) {
                         const msg: messagePayload = {
+                            username: user.name,
                             hubId: roomId,
                             content: message.toString(),
                         }
@@ -124,8 +143,9 @@ function ChatPage({ roomId }: { roomId: string }) {
                     onKeyDown={(e) => {
                         if (e.key == "Enter") {
                             e.preventDefault();
-                            if (message.trim()) {
+                            if (message.trim() && user?.name) {
                                 const msg: messagePayload = {
+                                    username: user.name,
                                     hubId: roomId,
                                     content: message.toString(),
                                 }

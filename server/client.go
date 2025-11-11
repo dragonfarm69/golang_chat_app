@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -21,8 +22,8 @@ var (
 )
 
 type Client struct {
-	// name string
-	id string
+	name string
+	id   string
 
 	// hub *Hub
 	hubs *HubManager
@@ -35,6 +36,11 @@ type Client struct {
 type IncomingMessage struct {
 	HubId   string `json:"hubId"`
 	Content string `json:"content"`
+}
+
+type MessagePayload struct {
+	Username string `json:"username"`
+	Content  string `json:"content"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -78,7 +84,18 @@ func (c *Client) handleIncomingMessages() {
 			if _, ok := hub.Clients[c]; !ok {
 				hub.register <- c
 			}
-			hub.broadcaster <- []byte(msg.Content)
+
+			payload := MessagePayload{
+				Username: c.name,
+				Content:  msg.Content,
+			}
+
+			jsonPayload, err := json.Marshal(payload)
+			if err != nil {
+				log.Println("Error when marshalling payload: ", err)
+				return
+			}
+			hub.broadcaster <- jsonPayload
 		} else {
 			log.Printf("Hub not found: %s", msg.HubId)
 		}
@@ -129,7 +146,7 @@ func (c *Client) handleOutgoingMessages() {
 	}
 }
 
-func serveWs(hub *HubManager, w http.ResponseWriter, r *http.Request) {
+func serveWs(hub *HubManager, w http.ResponseWriter, r *http.Request, client_name string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	// var join_message = []byte("a new client has joined")
 
@@ -139,12 +156,13 @@ func serveWs(hub *HubManager, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create a new client
-	client := &Client{id: "test", hubs: hub, connection: conn, send: make(chan []byte, 256)}
+	client_uuid := uuid.NewSHA1(uuid.NameSpaceDNS, []byte(client_name))
+	client := &Client{name: client_name, id: client_uuid.String(), hubs: hub, connection: conn, send: make(chan []byte, 256)}
 	// client.hub.register <- client
 	// client.hub.broadcaster <- join_message
 
 	go client.handleIncomingMessages()
 	go client.handleOutgoingMessages()
 
-	log.Printf("New client connected: %s", client.id)
+	log.Printf("New client connected (UUID): %s", client.id)
 }
