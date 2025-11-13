@@ -35,25 +35,25 @@ func main() {
 	hubManager.createNewHub("temp name")
 	mux.HandleFunc("/", serveMainHtml)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		// hubId := r.URL.Query().Get("hub")
+		hubId := r.URL.Query().Get("hub")
 		client_name := r.URL.Query().Get("username")
 		if client_name == "" {
 			http.Error(w, "Unknown User", http.StatusBadRequest)
 			return
 		}
 
-		// if hubId == "" {
-		// 	http.Error(w, "404 Not found", http.StatusNotFound)
-		// 	return
-		// }
+		if hubId == "" {
+			http.Error(w, "404 Not found", http.StatusNotFound)
+			return
+		}
 
-		// hub := hubManager.getHub(hubId)
-		// if hub == nil {
-		// 	http.Error(w, "404 Not found", http.StatusNotFound)
-		// 	return
-		// }
+		hub := hubManager.getHub(hubId)
+		if hub == nil {
+			http.Error(w, "404 Not found", http.StatusNotFound)
+			return
+		}
 
-		serveWs(hubManager, w, r, client_name)
+		serveWs(hubManager, w, r, client_name, hub)
 	})
 	mux.HandleFunc("/newhub", func(w http.ResponseWriter, r *http.Request) {
 		hub_id := hubManager.createNewHub("temp")

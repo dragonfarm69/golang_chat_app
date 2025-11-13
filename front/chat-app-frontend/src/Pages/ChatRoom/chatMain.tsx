@@ -56,19 +56,33 @@ function ChatPage({ roomId, clientName }: { roomId: string, clientName: string }
     const LogItem = ({ data }: { data: LogData }) => {
         // console.log(data)
         return (
-            <div className="log-item" style={{ display: "flex", margin: "5px", gap: "10px" }}>
-                {/* <div className="profile-picture">{data.profile}</div> */}
-                {/* <img className="profile-img" src={reactImg}></img> */}
-                {/* <div style={{background-image: {reactImg}}}></div> */}
-                <div>
-                    <div className="profile-img" style={{ backgroundImage: `url(${reactImg})` }}></div>
-                </div>
-                <div style={{ display: "block" }}>
-                    <div className="username">{data.username}</div>
-                    <div className="content">{data.message}</div>
-                    <div className="timestamp">{data.timestamp.toLocaleTimeString()}</div>
-                </div>
-            </div>
+            <>
+                {data.username === "!server" ? (
+                    <div className="log-item" style={{ display: "flex", margin: "5px", gap: "10px" }}>
+                        <div>
+                            <div className="username">{data.username}</div>
+                        </div>
+                        <div style={{ display: "block" }}>
+                            <div className="content">{data.message}</div>
+                            <div className="timestamp">{data.timestamp.toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                ) : (   
+                    <div className="log-item" style={{ display: "flex", margin: "5px", gap: "10px" }}>
+                        {/* <div className="profile-picture">{data.profile}</div> */}
+                        {/* <img className="profile-img" src={reactImg}></img> */}
+                        {/* <div style={{background-image: {reactImg}}}></div> */}
+                        <div>
+                            <div className="profile-img" style={{ backgroundImage: `url(${reactImg})` }}></div>
+                        </div>
+                        <div style={{ display: "block" }}>
+                            <div className="username">{data.username}</div>
+                            <div className="content">{data.message}</div>
+                            <div className="timestamp">{data.timestamp.toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                )}
+            </>
         );
     }
 

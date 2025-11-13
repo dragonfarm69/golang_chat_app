@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -146,9 +147,9 @@ func (c *Client) handleOutgoingMessages() {
 	}
 }
 
-func serveWs(hub *HubManager, w http.ResponseWriter, r *http.Request, client_name string) {
+func serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, client_name string, hub *Hub) {
 	conn, err := upgrader.Upgrade(w, r, nil)
-	// var join_message = []byte("a new client has joined")
+	var join_message = fmt.Sprintf("%s joined the room", client_name)
 
 	if err != nil {
 		log.Println(err)
@@ -157,9 +158,24 @@ func serveWs(hub *HubManager, w http.ResponseWriter, r *http.Request, client_nam
 
 	// create a new client
 	client_uuid := uuid.NewSHA1(uuid.NameSpaceDNS, []byte(client_name))
-	client := &Client{name: client_name, id: client_uuid.String(), hubs: hub, connection: conn, send: make(chan []byte, 256)}
+	client := &Client{name: client_name, id: client_uuid.String(), hubs: hubManager, connection: conn, send: make(chan []byte, 256)}
+
+	//register client to a hub
 	// client.hub.register <- client
 	// client.hub.broadcaster <- join_message
+	hub.register <- client
+
+	payload := MessagePayload{
+		Username: "!server",
+		Content:  join_message,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		log.Println("Error when marshalling payload: ", err)
+		return
+	}
+	hub.broadcaster <- jsonPayload
 
 	go client.handleIncomingMessages()
 	go client.handleOutgoingMessages()
