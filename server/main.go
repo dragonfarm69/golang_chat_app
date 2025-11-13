@@ -105,6 +105,13 @@ func main() {
 			return
 		}
 
+		is_client_exists := hub.isClientExists(clientId)
+		if is_client_exists {
+			w.WriteHeader(http.StatusExpectationFailed)
+			http.Error(w, "Client already exist !", http.StatusBadRequest)
+			return
+		}
+
 		// hub.disconnectClient(clientId)
 		// serveWs(hub, w, r)
 		w.WriteHeader(http.StatusOK)

@@ -100,6 +100,17 @@ func (h *Hub) disconnectClient(clientId string) {
 	h.unregisterId <- clientId
 }
 
+func (h *Hub) isClientExists(clientId string) bool {
+	// log.Println("Checking for lcient")
+	for c := range h.Clients {
+		if c.name == clientId {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (h *Hub) run() {
 	for {
 		select {
@@ -116,8 +127,6 @@ func (h *Hub) run() {
 		case client := <-h.unregister:
 			if _, ok := h.Clients[client]; ok {
 				delete(h.Clients, client)
-
-				h.broadcaster <- []byte("a client has left")
 			}
 		case id := <-h.unregisterId:
 			for client := range h.Clients {
@@ -142,6 +151,5 @@ func (h *Hub) run() {
 				}
 			}
 		}
-
 	}
 }
