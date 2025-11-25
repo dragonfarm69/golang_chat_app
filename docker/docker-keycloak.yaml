@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:18
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "${DATABASE_PORT}:5432"
+    environment:
+      POSTGRES_DB: ${DATAB_BASE_NAME}
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    networks:
+      - keycloak_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${DATAB_BASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '4.0'
+        reservations:
+          memory: 512M
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.5
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${DATAB_BASE_NAME}
+      KC_DB_USERNAME: ${DATABASE_USERNAME}
+      KC_DB_PASSWORD: ${DATABASE_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_PASSWORD}
+      # This is needed for Keycloak to start in dev mode with an http listener
+      KC_HTTP_ENABLED: true
+    ports:
+      - "8081:8080"
+    networks:
+      - keycloak_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G  # Hard limit of 2 Gigabytes
+          cpus: '4.0' # Hard limit of 4 CPU cores
+        reservations:
+          memory: 512M # Guaranteed minimum 512MB RAM
+
+networks:
+  keycloak_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
