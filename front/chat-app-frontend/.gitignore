@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+.cache
+shai-hulud-report.csv
+check.cjs

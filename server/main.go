@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
@@ -90,6 +91,7 @@ func main() {
 
 		hub.disconnectClient(clientId)
 	})
+
 	mux.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
 		hubId := r.URL.Query().Get("hub")
 		clientId := r.URL.Query().Get("client")
@@ -115,6 +117,35 @@ func main() {
 		// hub.disconnectClient(clientId)
 		// serveWs(hub, w, r)
 		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var payload RegisterPayload
+		err := json.NewDecoder(r.Body).Decode(&payload)
+
+		if err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		payload.Enabled = true
+
+		ctx := r.Context()
+		adminClient := Config.Client(ctx)
+
+		if err := createNewUser(ctx, adminClient, payload); err != nil {
+			log.Printf("Error creating new user: %v", err)
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
 	})
 
 	//Configure CORS
