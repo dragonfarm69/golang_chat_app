@@ -67,6 +67,149 @@ button {
   }
 }
 
+.side-bar {
+  width: 80px;
+  background-color: #7b13b8;
+  border-right: 1px solid #ddd;
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.main-container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  overflow: hidden;
+}
+
+/* Sidebar Room Icons */
+.room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  flex-grow: 1;
+  min-height: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background-color: #24c8db;
+}
+
+.side-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.wrapper {
+    display: flex;
+    flex-direction: row; 
+    flex-grow: 1;    
+    overflow: hidden;
+    min-height: 0;     
+}
+
+.room-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #e4e6eb;
+  border: none;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #050505;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.room-icon:hover {
+  background-color: #d8dadf;
+}
+
+.chat-area {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 97vh; 
+}
+
+.chat-log {
+  flex-grow: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background-color: green;
+  min-height: 0;
+  padding: 50px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  gap: 10px;
+}
+.chat-log::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-message {
+  padding: 0.5rem 1rem;
+  border-radius: 18px;
+  max-width: 60%;
+}
+
+.chat-message.me {
+  background-color: #0084ff;
+  color: white;
+  align-self: flex-end;
+}
+
+.chat-message.other {
+  background-color: #e4e6eb;
+  color: #050505;
+  align-self: flex-start;
+}
+
+.message-user {
+  font-size: 0.8rem;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+/* Message Input Form */
+.message-form {
+  display: flex;
+  padding: 1rem;
+  border-top: 1px solid #ddd;
+  gap: 1rem;
+  background-color: red;
+}
+
+.message-input {
+  flex-grow: 1;
+  border: 1px solid #ccc;
+  border-radius: 18px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+}
+
+.send-button {
+  padding: 0.5rem 1.5rem;
+  border: none;
+  background-color: #0084ff;
+  color: white;
+  border-radius: 18px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.send-button:hover {
+  background-color: #0073e6;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;

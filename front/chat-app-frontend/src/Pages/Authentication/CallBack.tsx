@@ -2,6 +2,7 @@ import "../../App.css";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Store } from "@tauri-apps/plugin-store";
 
 function CallBackPage() {
     const navigate = useNavigate();
@@ -22,6 +23,15 @@ function CallBackPage() {
                 sessionStorage.setItem("access_token", tokenData.access_token);
                 sessionStorage.setItem("refresh_token", tokenData.refresh_token);
 
+
+                const userInfo = await invoke("fetch_account_info", { accessToken: tokenData.access_token })
+                const userData = JSON.parse(userInfo as string)
+
+                //store info in store 
+                const store = await Store.load("cache_data.json");
+                await store.set("email", userData.email);
+                await store.set("username", userData.name);
+                await store.save(); // persist the store to disk
                 navigate("/join");
             }
             catch (error) {

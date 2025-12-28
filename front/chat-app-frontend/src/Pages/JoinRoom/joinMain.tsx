@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "../../App.css";
 import { useUser } from "../../Context/userContext";
 import UserInfo from "../../Modules/clientModule";
+import { Store } from "@tauri-apps/plugin-store";
 
 function JoinRoomPage({ onJoin }: { onJoin: (roomId: string, clientName: string) => void}) {
     const [roomId, setRoomId] = useState("");
