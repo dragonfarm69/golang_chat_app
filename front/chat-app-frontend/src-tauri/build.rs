@@ -19,10 +19,10 @@ fn main() {
     }
     
     // Rerun if these change
-    println!("cargo:rerun-if-env-changed=BACKEND_REGISTER_URL");
-    println!("cargo:rerun-if-env-changed=REDIRECT_URL");
-    println!("cargo:rerun-if-env-changed=TOKEN_URL");
-    println!("cargo:rerun-if-env-changed=CLIENT_ID");
-    println!("cargo:rerun-if-changed=.env");
+    // println!("cargo:rerun-if-env-changed=BACKEND_REGISTER_URL");
+    // println!("cargo:rerun-if-env-changed=REDIRECT_URL");
+    // println!("cargo:rerun-if-env-changed=TOKEN_URL");
+    // println!("cargo:rerun-if-env-changed=CLIENT_ID");
+    // println!("cargo:rerun-if-changed=.env");
     tauri_build::build();
 }

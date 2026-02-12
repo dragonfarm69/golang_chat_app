@@ -20,8 +20,11 @@ function CallBackPage() {
                 sessionStorage.removeItem("pkce_verifier");
                 
                 //store tokens
-                sessionStorage.setItem("access_token", tokenData.access_token);
-                sessionStorage.setItem("refresh_token", tokenData.refresh_token);
+                const loginSuccess = await invoke("login", { verifier, code });
+
+                if (!loginSuccess) {
+                    throw new Error("Failed to store tokens securely.");
+                }
 
 
                 const userInfo = await invoke("fetch_account_info", { accessToken: tokenData.access_token })

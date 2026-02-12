@@ -5,10 +5,15 @@ interface UserContextType {
     user: UserInfo | null;
     setUser: Dispatch<SetStateAction<any>>;
 }
+
 const UserContext = createContext<UserContextType | null>(null)
 
 export const UserProvider = ({children}: {children: React.ReactNode}) => {
     const [user, setUser] = useState(null);
+
+    const initializeUser = () => {
+        
+    }
 
     return (
         <UserContext.Provider value={{ user, setUser }}>
@@ -24,3 +29,5 @@ export const useUser = () => {
     }
     return context
 }
+
+// export intializeUser = )
