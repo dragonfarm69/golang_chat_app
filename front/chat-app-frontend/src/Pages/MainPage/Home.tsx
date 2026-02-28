@@ -155,14 +155,51 @@ function HomePage() {
     setIsJoinRoomPopupOpen(false);
   };
 
-  const handleRoomSelect = (room: (typeof rooms)[0]) => {
+  const handleRoomSelect = (room: (typeof rooms)[0], location?: string, droppedOnRoomWithId?: string) => {
     const roomIndex = selectedRooms.findIndex(
       (r) => r.id.toString() === room.id.toString(),
     );
 
     //not found
     if (roomIndex === -1) {
-      setSelectedRooms((prev) => [...prev, room]);
+      if(location) {
+        //get the needed index to add the chat room to rooms
+        const dropIndex = selectedRooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId)
+        console.log(selectedRooms)
+        console.log("dropped on index: ", rooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId))
+
+        switch (location) {
+          case "top":
+            break;
+          case "bottom":
+            break;
+          case "left":
+            setSelectedRooms((prev) => {
+              const newRooms = [...prev]
+              newRooms.splice(dropIndex, 0, room)
+              return newRooms
+            })
+            break;
+          case "right":
+            if(dropIndex < selectedRooms.length) {
+              setSelectedRooms((prev) => {
+                const newRooms = [...prev]
+                newRooms.splice(dropIndex + 1, 0, room)
+                return newRooms
+              })
+            }
+            else {
+              setSelectedRooms((prev) => [...prev, room]);
+            }
+            break;
+          default:
+            setSelectedRooms((prev) => [...prev, room]);
+            break;
+        }
+      }
+      else {
+        setSelectedRooms((prev) => [...prev, room]);
+      }
       setActiveRoomIndex(selectedRooms.length);
     } else {
       setActiveRoomIndex(roomIndex);
@@ -221,23 +258,18 @@ function HomePage() {
     const threshold = 0.3;
 
     if (y < height * threshold) {
-      //Spawn window top
       return "top";
     }
       
     if (y > height * (1 - threshold)) {
-      //Spawn window bottom
       return "bottom";
     } 
 
     if (x < width * threshold) {
-      //Spawn window left
-
       return "left";
     } 
     
     if (x > width * (1 - threshold)) {
-      //Spawn window right
       return "right";
     } 
 
@@ -288,10 +320,15 @@ function HomePage() {
 
     // Check if dropping on a chat window
     if (over.id.toString().startsWith("chat-")) {
-      // const roomId = parseInt(over.id.toString().replace("chat-", ""));
+      const targetRoomId = over.id.toString().replace("chat-", "");
       const room = getRoomById(active.id.toString());
-      if (room) {
-        handleRoomSelect(room);
+
+      if (room && currentRegion) {
+        //get current region
+        const region = detectRegion(event);
+        // console.log("current region: ", region)
+        // console.log("dropped on: ", targetRoomId)
+        handleRoomSelect(room, region as string, targetRoomId as string);
       }
       setActiveId(null);
       setCurrentRegion(null);

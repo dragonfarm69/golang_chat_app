@@ -1,6 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use std::{env, fs::remove_file, string};
-use serde_json::json;d
+use serde_json::json;
 use tauri_plugin_store::StoreExt;
 use keyring::{Entry};
 
