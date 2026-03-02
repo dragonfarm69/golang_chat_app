@@ -28,6 +28,8 @@ const initialRoomsData = [
   { id: 2, name: "Tech Talk", icon: "T" },
   { id: 3, name: "Project Phoenix", icon: "P" },
   { id: 4, name: "Random", icon: "R" },
+  { id: 5, name: "Gaming", icon: "GM" },
+  { id: 6, name: "Music", icon: "MS" },
 ];
 
 const initialMessages: { [key: number]: any[] } = {
@@ -104,6 +106,33 @@ const initialMessages: { [key: number]: any[] } = {
       text: "What's a good movie to watch this weekend?",
       sender: "other",
       timestamp: "03:45 PM",
+    },
+  ],
+  5: [
+    // Gaming
+    {
+      id: 1,
+      user: "Gamer1",
+      text: "Anyone up for a match later?",
+      sender: "other",
+      timestamp: "07:15 PM",
+    },
+    {
+      id: 2,
+      user: "You",
+      text: "I'm in! What game?",
+      sender: "me",
+      timestamp: "07:16 PM",
+    },
+  ],
+  6: [
+    // Music
+    {
+      id: 1,
+      user: "MusicLover",
+      text: "Check out this new album, it's amazing!",
+      sender: "other",
+      timestamp: "02:30 PM",
     },
   ],
 };
@@ -402,8 +431,8 @@ function HomePage() {
               </DroppableZone>
             </div>
             <div className="main-container">
-              <div className="multi-chat-container">
-                {selectedRooms.map((room) => (
+              <div className={"multi-chat-container"}>
+                {selectedRooms.slice(0, 3).map((room) => (
                   <DroppableZone
                     key={room.id}
                     id={`chat-${room.id}`}
@@ -435,6 +464,42 @@ function HomePage() {
                   </DroppableZone>
                 ))}
               </div>
+
+              { selectedRooms.length >= 4 &&
+                <div className={"multi-chat-container"}>
+                  {selectedRooms.slice(3, 6).map((room) => (
+                    <DroppableZone
+                      key={room.id}
+                      id={`chat-${room.id}`}
+                      className="chat-window"
+                      hoveredRegion={
+                        currentRegionId === `chat-${room.id}`
+                          ? currentRegion
+                          : null
+                      }
+                    >
+                      <div className="chat-header">
+                        <span className="chat-header-title"># {room.name}</span>
+                        {selectedRooms.length > 1 && (
+                          <button
+                            className="close-chat-btn"
+                            onClick={() => handleCloseRoom(room.id.toString())}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                      <ChatArea
+                        selectedRoom={room}
+                        messages={allMessages[room.id] || []}
+                        newMessage={newMessage[room.id] || ""}
+                        onMessageChange={handleMessageChange(room.id)}
+                        onSendMessage={handleSendMessage(room.id)}
+                      />
+                    </DroppableZone>
+                  ))}
+                </div>
+              }
             </div>
           </div>
           <DragOverlay>
