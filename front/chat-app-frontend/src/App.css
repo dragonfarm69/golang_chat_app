@@ -299,6 +299,28 @@ button {
   border-radius: 3px;
 }
 
+@keyframes warning-flash {
+  0%, 100% {
+    background-color: white;
+  }
+
+  25% {
+    background-color: #7f1d1d;
+  }
+
+  50% {
+    background-color: #dc2626;
+  }
+
+  75% {
+    background-color: #7f1d1d;
+  }
+}
+
+.warning-flashing {
+  animation: warning-flash 0.5s 2;
+}
+
 .form-container {
   display: flex;
   gap: 0.5em;

@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { RoomListBar } from "../../Components/RoomListBar";
+import { RoomButton } from "../../Components/RoomButton";
 import { DroppableZone, REGION } from "../../Components/DroppableZone";
 // import { ChatArea } from "../../Components/ChatArea";
 import { ChatArea } from "./ChatArea";
@@ -30,6 +30,8 @@ const initialRoomsData = [
   { id: 4, name: "Random", icon: "R" },
   { id: 5, name: "Gaming", icon: "GM" },
   { id: 6, name: "Music", icon: "MS" },
+  { id: 7, name: "Art", icon: "ART" },
+  { id: 8, name: "Food", icon: "FD" },
 ];
 
 const initialMessages: { [key: number]: any[] } = {
@@ -135,9 +137,55 @@ const initialMessages: { [key: number]: any[] } = {
       timestamp: "02:30 PM",
     },
   ],
+  7: [
+    // Art
+    {
+      id: 1,
+      user: "Artist123",
+      text: "Just finished my digital painting!",
+      sender: "other",
+      timestamp: "01:20 PM",
+    },
+    {
+      id: 2,
+      user: "You",
+      text: "That looks incredible! What software did you use?",
+      sender: "me",
+      timestamp: "01:22 PM",
+    },
+  ],
+  8: [
+    // Food
+    {
+      id: 1,
+      user: "Foodie",
+      text: "Anyone know a good recipe for pasta carbonara?",
+      sender: "other",
+      timestamp: "12:15 PM",
+    },
+    {
+      id: 2,
+      user: "ChefMike",
+      text: "I've got the perfect one! DM me.",
+      sender: "other",
+      timestamp: "12:17 PM",
+    },
+    {
+      id: 3,
+      user: "You",
+      text: "I'd love to try it too!",
+      sender: "me",
+      timestamp: "12:18 PM",
+    },
+  ],
 };
 
+
 function HomePage() {
+  const BUTTON_FLASHING_ANIMATION_TIMER = 2000;
+  const ROOMS_CAP = 6 // the amount of rooms can be opened at the same time
+  const [buttonFlashing, setIsButtonFlashing] = useState<Set<String>>(new Set()); // to track which button should be flashing at the moment
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [rooms, setRooms] = useState(initialRoomsData);
   const [allMessages, setAllMessages] = useState(initialMessages);
@@ -185,6 +233,11 @@ function HomePage() {
   };
 
   const handleRoomSelect = (room: (typeof rooms)[0], location?: string, droppedOnRoomWithId?: string) => {
+    //prevent user from opening more room
+    if (selectedRooms.length === ROOMS_CAP) {
+      return
+    }
+
     const roomIndex = selectedRooms.findIndex(
       (r) => r.id.toString() === room.id.toString(),
     );
@@ -410,12 +463,33 @@ function HomePage() {
                   strategy={verticalListSortingStrategy}
                 >
                   {rooms.map((room) => (
-                    <RoomListBar
+                    <RoomButton
                       id={room.id.toString()}
                       key={room.id}
-                      className="room-icon"
                       title={room.name}
-                      onClick={() => handleRoomSelect(room)}
+                      flashing={buttonFlashing.has(room.id.toString())}
+                      onClick={() => {
+                        if (selectedRooms.length === ROOMS_CAP) {
+                          //get the button id and set state
+                          setIsButtonFlashing(prev => {
+                            const newSet = new Set(prev);
+                            newSet.add(room.id.toString())
+
+                            //set time out to reset the button state
+                            setTimeout(() => {
+                              setIsButtonFlashing(prev => {
+                                const buttonSetAfterDelete = new Set(prev)
+                                buttonSetAfterDelete.delete(room.id.toString())
+                                return buttonSetAfterDelete
+                              })
+                            }, BUTTON_FLASHING_ANIMATION_TIMER)
+                            return newSet;
+                          })
+                          console.log(buttonFlashing)
+                          return
+                        }
+                        handleRoomSelect(room)
+                      }}
                       style={{
                         backgroundColor: selectedRooms.some(
                           (r) => r.id === room.id,
@@ -425,7 +499,7 @@ function HomePage() {
                       }}
                     >
                       {room.icon}
-                    </RoomListBar>
+                    </RoomButton>
                   ))}
                 </SortableContext>
               </DroppableZone>

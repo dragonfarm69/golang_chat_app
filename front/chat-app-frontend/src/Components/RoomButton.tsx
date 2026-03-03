@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 interface SortableItemProps extends React.HTMLAttributes<HTMLButtonElement> {
   id: string;
   children: React.ReactNode;
+  flashing: boolean;
 }
 
-export const RoomListBar = React.memo(
-  ({ id, children, ...props }: SortableItemProps) => {
+export const RoomButton = React.memo(
+  ({ id, children, flashing, ...props }: SortableItemProps) => {
+    // const [isFlashing, setIsFlashing] = useState<boolean>(false);
+
     const {
       attributes,
       listeners,
@@ -24,11 +27,16 @@ export const RoomListBar = React.memo(
       opacity: isDragging ? 0.5 : 1,
       ...props.style,
     };
-
+    
     return (
       <button
         ref={setNodeRef}
         style={style}
+        className={"room-icon" + " " + (flashing ? "warning-flashing" : "")}
+        onClick={() => {
+          // console.log("flashing")
+          // setIsFlashing(true)
+        }}
         {...listeners}
         {...attributes}
         {...props}
@@ -39,4 +47,4 @@ export const RoomListBar = React.memo(
   }
 );
 
-RoomListBar.displayName = "RoomListBar";
+RoomButton.displayName = "RoomButton";
