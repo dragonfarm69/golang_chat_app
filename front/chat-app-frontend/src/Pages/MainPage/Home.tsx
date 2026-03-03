@@ -485,7 +485,6 @@ function HomePage() {
                             }, BUTTON_FLASHING_ANIMATION_TIMER)
                             return newSet;
                           })
-                          console.log(buttonFlashing)
                           return
                         }
                         handleRoomSelect(room)

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import "../../App.css";
-import { useState } from "react";
+import { useState } from "react"; 
 
 function generateCodeVerifier() {
     const array = new Uint8Array(32);
@@ -22,7 +22,7 @@ async function generateCodeChallenge(verifier: string) {
         .replace(/=+$/, '');
 }
 
-function LoginPage() {
+function LoginPage({isRegistering} : {isRegistering: () => void}) {
 
     const handleOnClick = async () => {
         const verifier = generateCodeVerifier();
@@ -40,15 +40,33 @@ function LoginPage() {
             code_challenge_method: "S256",
         });
 
-
         window.location.href =
             "http://localhost:8081/realms/chat-app/protocol/openid-connect/auth?" +
             params.toString();
     }
 
     return (
-        <div className="app-container" style={{backgroundColor: "white"}}>
-            <button className="join-room-button" type="button" onClick={handleOnClick}>Login</button>
+        <div className="login-container">
+            <div className="login-card">
+                <div className="login-header">
+                    <img src={"/src/assets/app_icon.png"} className="app-icon"></img>
+                    <h1 className="login-title">Welcome Back!</h1>
+                </div>
+                
+                <button className="login-button" type="button" onClick={handleOnClick}>
+                    <span>Login</span>
+                </button>
+
+                <div className="login-footer">
+                    <p>Need an account? 
+                        <a className="register-link"
+                        onClick={() => {
+                            isRegistering()
+                        }}
+                        >Register</a>
+                    </p>
+                </div>
+            </div>
         </div>
     )
 }

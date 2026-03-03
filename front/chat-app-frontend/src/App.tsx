@@ -1,35 +1,32 @@
 import { useState } from "react";
 import "./App.css";
-// import ChatPage from "./Pages/ChatRoom/chatMain";
-import LoginPage from "./Pages/Authentication/LoginPage";
-import RegisterPage from "./Pages/Authentication/RegisterPage";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ErrorPage from "./Pages/Error/errorPage";
 import CallBackPage from "./Pages/Authentication/CallBack";
 import HomePage from "./Pages/MainPage/Home";
 import { AuthProvider } from "./Context/AuthContext";
 import { ProtectedRoute } from "./Components/protectedRoute";
+import MainAuthenticationPage from "./Pages/Authentication/Main";
 
 function App() {
   return (
-    // <AuthProvider>
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route
             path="/"
             element={
-              // <ProtectedRoute>
+              <ProtectedRoute>
                 <HomePage />
-              // </ProtectedRoute>
+              </ProtectedRoute>
             }
           />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/authentication" element={<MainAuthenticationPage />} />
           <Route path="/callback" element={<CallBackPage />} />
           <Route path="*" element={<ErrorPage />} />
         </Routes>
       </BrowserRouter>
-    // </AuthProvider>
+    </AuthProvider>
   );
 }
 

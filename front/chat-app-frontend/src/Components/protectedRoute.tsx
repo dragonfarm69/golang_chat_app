@@ -13,7 +13,7 @@ export const ProtectedRoute = ({children} : ProtectedRouteProps) => {
     }
 
     if(!isAuthenticated) {
-        return <Navigate to={"/login"}></Navigate>
+        return <Navigate to={"/authentication"}></Navigate>
     } 
 
     return <>{children}</>;
