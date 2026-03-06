@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model direct_messages {
+  id                                       String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sender_id                                String    @db.Uuid
+  receiver_id                              String    @db.Uuid
+  content                                  String
+  message_type                             String?   @default("text") @db.VarChar(20)
+  is_read                                  Boolean?  @default(false)
+  created_at                               DateTime? @default(now()) @db.Timestamptz(6)
+  users_direct_messages_receiver_idTousers users     @relation("direct_messages_receiver_idTousers", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_direct_messages_sender_idTousers   users     @relation("direct_messages_sender_idTousers", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sender_id, receiver_id, created_at(sort: Desc)], map: "idx_direct_messages_created_at")
+  @@index([receiver_id], map: "idx_direct_messages_receiver")
+  @@index([sender_id], map: "idx_direct_messages_sender")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model messages {
+  id             String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  room_id        String     @db.Uuid
+  user_id        String?    @db.Uuid
+  content        String
+  message_type   String?    @default("text") @db.VarChar(20)
+  is_edited      Boolean?   @default(false)
+  parent_id      String?    @db.Uuid
+  created_at     DateTime?  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?  @default(now()) @db.Timestamptz(6)
+  messages       messages?  @relation("messagesTomessages", fields: [parent_id], references: [id], onUpdate: NoAction)
+  other_messages messages[] @relation("messagesTomessages")
+  rooms          rooms      @relation(fields: [room_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users?     @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([room_id, created_at(sort: Desc)], map: "idx_messages_created_at")
+  @@index([room_id], map: "idx_messages_room_id")
+  @@index([user_id], map: "idx_messages_user_id")
+}
+
+model room_invitations {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  room_id     String    @db.Uuid
+  invited_by  String    @db.Uuid
+  invite_code String    @unique @db.VarChar(20)
+  max_uses    Int?
+  use_count   Int?      @default(0)
+  expires_at  DateTime? @db.Timestamptz(6)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  users       users     @relation(fields: [invited_by], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rooms       rooms     @relation(fields: [room_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model room_members {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  room_id   String    @db.Uuid
+  user_id   String    @db.Uuid
+  role      String?   @default("member") @db.VarChar(20)
+  joined_at DateTime? @default(now()) @db.Timestamptz(6)
+  rooms     rooms     @relation(fields: [room_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users     users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([room_id, user_id])
+  @@index([room_id], map: "idx_room_members_room_id")
+  @@index([user_id], map: "idx_room_members_user_id")
+}
+
+model rooms {
+  id               String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name             String             @db.VarChar(100)
+  description      String?
+  is_private       Boolean?           @default(false)
+  owner_id         String             @db.Uuid
+  created_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?          @default(now()) @db.Timestamptz(6)
+  messages         messages[]
+  room_invitations room_invitations[]
+  room_members     room_members[]
+  users            users              @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  id                                                 String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username                                           String             @unique @db.VarChar(50)
+  email                                              String             @unique @db.VarChar(255)
+  avatar_url                                         String?
+  status                                             String?            @default("offline") @db.VarChar(20)
+  created_at                                         DateTime?          @default(now()) @db.Timestamptz(6)
+  updated_at                                         DateTime?          @default(now()) @db.Timestamptz(6)
+  direct_messages_direct_messages_receiver_idTousers direct_messages[]  @relation("direct_messages_receiver_idTousers")
+  direct_messages_direct_messages_sender_idTousers   direct_messages[]  @relation("direct_messages_sender_idTousers")
+  messages                                           messages[]
+  room_invitations                                   room_invitations[]
+  room_members                                       room_members[]
+  rooms                                              rooms[]
+}

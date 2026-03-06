@@ -491,25 +491,36 @@ button {
   height: 100%;
 }
 
-.login-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.authentication-main-container {
+  display: grid;
+  place-items: center;
   min-height: 100vh;
   background: linear-gradient(135deg, #5865F2 0%, #3b4ac7 100%);
+}
+
+.authentication-container {
+  display: grid;
   padding: 20px;
 }
 
-.login-card {
+.authentication-container.is-registering {
+  transition: height 0.5s 1000px;
+}
+
+.authentication-card {
   background: #313338;
   border-radius: 8px;
   padding: 40px;
-  width: 100%;
-  max-width: 480px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+  width: 600px;
+  min-height: 300px;
+
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.login-header {
+.authentication-header {
   text-align: center;
   margin-bottom: 32px;
 }
@@ -532,7 +543,7 @@ button {
   }
 }
 
-.login-title {
+.authentication-title {
   color: #f2f3f5;
   font-size: 24px;
   font-weight: 600;
@@ -577,10 +588,6 @@ button {
 .register-link:hover {
   color: #00c7fc;
   text-decoration: underline;
-}
-
-.register-card {
-  max-width: 520px;
 }
 
 .register-form {

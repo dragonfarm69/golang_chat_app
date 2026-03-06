@@ -46,28 +46,20 @@ function LoginPage({isRegistering} : {isRegistering: () => void}) {
     }
 
     return (
-        <div className="login-container">
-            <div className="login-card">
-                <div className="login-header">
-                    <img src={"/src/assets/app_icon.png"} className="app-icon"></img>
-                    <h1 className="login-title">Welcome Back!</h1>
-                </div>
-                
-                <button className="login-button" type="button" onClick={handleOnClick}>
-                    <span>Login</span>
-                </button>
-
-                <div className="login-footer">
-                    <p>Need an account? 
-                        <a className="register-link"
-                        onClick={() => {
-                            isRegistering()
-                        }}
-                        >Register</a>
-                    </p>
-                </div>
+        <>
+            <button className="login-button" type="button" onClick={handleOnClick}>
+                <span>Login</span>
+            </button>
+            <div className="login-footer">
+                <p>Need an account? 
+                    <a className="register-link"
+                    onClick={() => {
+                        isRegistering()
+                    }}
+                    >Register</a>
+                </p>
             </div>
-        </div>
+        </>
     )
 }
 

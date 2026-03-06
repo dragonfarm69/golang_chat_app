@@ -1,7 +1,6 @@
 import "../../App.css";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import appIcon from "../../assets/app_icon.png";
 
 function RegisterPage({isRegistering} : {isRegistering: () => void}) {
     const [firstName, setFirstName] = useState("");
@@ -32,90 +31,82 @@ function RegisterPage({isRegistering} : {isRegistering: () => void}) {
     }
 
     return (
-        <div className="login-container">
-            <div className="login-card register-card">
-                <div className="login-header">
-                    <img src={appIcon} alt="App Icon" className="login-logo" />
-                    <h1 className="login-title">Create an account</h1>
-                    <p className="login-subtitle">We're excited to have you join us!</p>
+        <>       
+            <form className="register-form" onSubmit={(e) => {e.preventDefault(); handleSubmit(e)}}> 
+                <div className="form-row">
+                    <div className="form-field">
+                        <label htmlFor="firstName">First Name</label>
+                        <input 
+                            id="firstName"
+                            placeholder="Enter first name" 
+                            type="text" 
+                            value={firstName} 
+                            onChange={(e) => setFirstName(e.target.value)}
+                            required
+                        />
+                    </div>
+                    <div className="form-field">
+                        <label htmlFor="lastName">Last Name</label>
+                        <input 
+                            id="lastName"
+                            placeholder="Enter last name" 
+                            type="text" 
+                            value={lastName} 
+                            onChange={(e) => setLastName(e.target.value)}
+                            required
+                        />
+                    </div>
                 </div>
                 
-                <form className="register-form" onSubmit={(e) => {e.preventDefault(); handleSubmit(e)}}> 
-                    <div className="form-row">
-                        <div className="form-field">
-                            <label htmlFor="firstName">First Name</label>
-                            <input 
-                                id="firstName"
-                                placeholder="Enter first name" 
-                                type="text" 
-                                value={firstName} 
-                                onChange={(e) => setFirstName(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <div className="form-field">
-                            <label htmlFor="lastName">Last Name</label>
-                            <input 
-                                id="lastName"
-                                placeholder="Enter last name" 
-                                type="text" 
-                                value={lastName} 
-                                onChange={(e) => setLastName(e.target.value)}
-                                required
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="form-field">
-                        <label htmlFor="email">Email</label>
-                        <input 
-                            id="email"
-                            placeholder="Enter your email" 
-                            type="email" 
-                            value={email} 
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                    </div>
-                    
-                    <div className="form-field">
-                        <label htmlFor="password">Password</label>
-                        <input 
-                            id="password"
-                            placeholder="Enter password" 
-                            type="password" 
-                            value={password} 
-                            onChange={(e) => setUserPassword(e.target.value)}
-                            required
-                        />
-                    </div>
-                    
-                    <div className="form-field">
-                        <label htmlFor="passwordCheck">Confirm Password</label>
-                        <input 
-                            id="passwordCheck"
-                            placeholder="Re-enter password" 
-                            type="password" 
-                            value={passwordCheck} 
-                            onChange={(e) => setUserPasswordCheck(e.target.value)}
-                            required
-                        />
-                    </div>
-                    
-                    <button className="login-button" type="submit">
-                        <span>Create Account</span>
-                    </button>
-                </form>
-
-                <div className="login-footer">
-                    <p>Already have an account? 
-                        <a className="register-link"
-                        onClick={() => isRegistering()}
-                        >Login</a>
-                        </p>
+                <div className="form-field">
+                    <label htmlFor="email">Email</label>
+                    <input 
+                        id="email"
+                        placeholder="Enter your email" 
+                        type="email" 
+                        value={email} 
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
                 </div>
+                
+                <div className="form-field">
+                    <label htmlFor="password">Password</label>
+                    <input 
+                        id="password"
+                        placeholder="Enter password" 
+                        type="password" 
+                        value={password} 
+                        onChange={(e) => setUserPassword(e.target.value)}
+                        required
+                    />
+                </div>
+                
+                <div className="form-field">
+                    <label htmlFor="passwordCheck">Confirm Password</label>
+                    <input 
+                        id="passwordCheck"
+                        placeholder="Re-enter password" 
+                        type="password" 
+                        value={passwordCheck} 
+                        onChange={(e) => setUserPasswordCheck(e.target.value)}
+                        required
+                    />
+                </div>
+                
+                <button className="login-button" type="submit">
+                    <span>Create Account</span>
+                </button>
+            </form>
+
+            <div className="login-footer">
+                <p>Already have an account? 
+                    <a className="register-link"
+                    onClick={() => isRegistering()}
+                    >Login</a>
+                    </p>
             </div>
-        </div>
+        </>
     )
 }
 
