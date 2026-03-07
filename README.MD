@@ -115,8 +115,31 @@ KEYCLOAK_PASSWORD=admin
 
 ### 2. Initialize the Database
 
+> **Note:** All Prisma commands must be run from the **root of the project**, where `package.json` and `prisma.config.ts` are located.
+
+First, install the root dependencies:
+
+```bash
+npm install
+```
+
+Create a `.env` file in the root directory with the database URL:
+
+```env
+DATABASE_URL=postgres://<user>:<password>@localhost:5432/app_main
+```
+
+Then run the initial SQL migration to create the schema and tables:
+
 ```bash
 psql -U <your_db_user> -d app_main -f prisma/init_db.sql
+```
+
+After the schema is created, generate the Prisma client and seed the database:
+
+```bash
+npx prisma generate
+npx prisma db seed
 ```
 
 ### 3. Start the Go Backend

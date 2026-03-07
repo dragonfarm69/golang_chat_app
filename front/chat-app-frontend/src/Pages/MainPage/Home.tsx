@@ -22,6 +22,8 @@ import { RoomButton } from "../../Components/RoomButton";
 import { DroppableZone, REGION } from "../../Components/DroppableZone";
 // import { ChatArea } from "../../Components/ChatArea";
 import { ChatArea } from "./ChatArea";
+import { useChatData } from "../../Context/DataContext";
+import { Message } from "../../db";
 
 const initialRoomsData = [
   { id: 1, name: "General", icon: "G" },
@@ -198,9 +200,16 @@ function HomePage() {
   const [currentRegion, setCurrentRegion] = useState<REGION>(null);
   const [currentRegionId, setCurrentRegionID] = useState<String | null>(null);
 
+  const { saveChatData, deleteChatData } = useChatData();
+
   const handleSendMessage = (roomId: number) => (e: React.FormEvent) => {
     e.preventDefault();
     const messageText = newMessage[roomId] || "";
+
+    const timestamp = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
     if (messageText.trim() === "") return;
     const message = {
@@ -208,16 +217,23 @@ function HomePage() {
       user: "You",
       text: messageText,
       sender: "me" as const,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      timestamp: timestamp
     };
     setAllMessages((prevMessages) => ({
       ...prevMessages,
       [roomId]: [...(prevMessages[roomId] || []), message],
     }));
     setNewMessage("");
+
+    //save to indexDB
+    const dbMessage: Message = {
+      id: crypto.randomUUID(),
+      room_id: roomId.toString(),
+      user_id: "me",
+      content: messageText,
+      timeStamp: timestamp,
+    }
+    saveChatData(dbMessage)
   };
 
   const handleMessageChange = (roomId: number) => (value: string) => {

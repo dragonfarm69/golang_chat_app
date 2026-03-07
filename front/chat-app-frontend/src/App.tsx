@@ -7,6 +7,7 @@ import HomePage from "./Pages/MainPage/Home";
 import { AuthProvider } from "./Context/AuthContext";
 import { ProtectedRoute } from "./Components/protectedRoute";
 import MainAuthenticationPage from "./Pages/Authentication/Main";
+import { ChatDataProvider } from "./Context/DataContext";
 
 function App() {
   return (
@@ -16,9 +17,11 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              // <ProtectedRoute>
+              <ChatDataProvider>
                 <HomePage />
-              </ProtectedRoute>
+              </ChatDataProvider>
+              // </ProtectedRoute>
             }
           />
           <Route path="/authentication" element={<MainAuthenticationPage />} />
