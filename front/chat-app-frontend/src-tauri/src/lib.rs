@@ -3,6 +3,11 @@ use std::{env, fs::remove_file, string};
 use serde_json::json;
 use tauri_plugin_store::StoreExt;
 use keyring::{Entry};
+use futures_util::{SinkExt, StreamExt, lock::Mutex};
+use tauri::{Emitter, Manager, State};
+use serde::Serialize;
+use tokio::sync::mpsc;
+use tokio_tungstenite::connect_async;
 
 const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
 const REDIRECT_URL: &str = env!("REDIRECT_URL");
@@ -14,7 +19,8 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-use serde::Serialize;
+
+struct WsSender(Mutex<Option<mpsc::UnboundedSender<String>>>);
 
 #[derive(Serialize)]
 struct UserAccountPayload {
@@ -144,7 +150,6 @@ async fn logout() -> bool {
 
 #[tauri::command]
 async fn checkAuth() -> bool {
-    println!("hello world");
     if let Ok(access_token) = get_data_from_keyring("access_token".to_string()) {
         let is_ok = fetch_account_info(access_token).await.is_ok();
         println!("test: {}", is_ok);
@@ -154,12 +159,69 @@ async fn checkAuth() -> bool {
     }
 }
 
+#[tauri::command]
+async fn establish_ws(app: tauri::AppHandle, state: State<'_, WsSender>, user_id: String) -> Result<(), String> {
+    //NOTE: use wss for production which is more secured
+    let url = format!("ws://localhost:8080/ws?user_id={}", user_id);
+
+    let (ws_stream, _) = connect_async(&url)
+                                                                .await
+                                                                .map_err(|e| e.to_string())?;
+    
+
+    let (mut write, mut read) = ws_stream.split();
+    
+    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+
+    {
+        let mut sender = state.0.lock().await;
+        *sender = Some(tx);
+    }
+
+    let app_handle = app.clone();
+
+    //Reading message from server via WS
+    //async move make the ws be able to continue to run even after function return
+    tokio::spawn(async move {
+        while let Some(msg) = read.next().await {
+            if let Ok(msg) = msg {
+                let _ = app_handle.emit("ws-message", msg.to_text().unwrap_or(""));
+            }
+        }
+    });
+
+    //Sending message to server
+    tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            if let Err(e) = write.send(tokio_tungstenite::tungstenite::Message::Text(msg.into())).await {
+                println!("Error when sending message: {}", e);
+                break;
+            }      
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn send_message(state: State<'_, WsSender>, message: String) -> Result<(), String> {
+    //lock the mutex
+    let sender = state.0.lock().await;
+    if let Some(tx) = sender.as_ref() {
+        tx.send(message).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Something is wrong with websocker connection".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     dotenvy::dotenv().ok();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .manage(WsSender(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             greet,
             register_account,
@@ -169,6 +231,8 @@ pub fn run() {
             logout,
             get_data_from_keyring,
             checkAuth,
+            establish_ws,
+            send_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
