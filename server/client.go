@@ -34,14 +34,12 @@ type Client struct {
 	send chan []byte
 }
 
-type IncomingMessage struct {
-	HubId   string `json:"hubId"`
-	Content string `json:"content"`
-}
-
 type MessagePayload struct {
-	Username string `json:"username"`
-	Content  string `json:"content"`
+	Id        string `json:"id"`
+	User_ID   string `json:"user_id"`
+	Room_ID   string `json:"room_id"`
+	Content   string `json:"content"`
+	TimeStamp string `json:"timeStamp"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -73,32 +71,27 @@ func (c *Client) handleIncomingMessages() {
 		log.Println("message:", string(message))
 
 		//Get message destination by parsing json
-		var msg IncomingMessage
+		var msg MessagePayload
 		if err := json.Unmarshal(message, &msg); err != nil {
 			log.Println("Error when parsing message: ", err)
 			continue
 		}
 
-		hub := c.hubs.getHub(msg.HubId)
+		hub := c.hubs.getHub(msg.Room_ID)
 		if hub != nil {
 			//register client to that hub if not found
 			if _, ok := hub.Clients[c]; !ok {
 				hub.register <- c
 			}
 
-			payload := MessagePayload{
-				Username: c.name,
-				Content:  msg.Content,
-			}
-
-			jsonPayload, err := json.Marshal(payload)
+			jsonPayload, err := json.Marshal(msg)
 			if err != nil {
 				log.Println("Error when marshalling payload: ", err)
 				return
 			}
 			hub.broadcaster <- jsonPayload
 		} else {
-			log.Printf("Hub not found: %s", msg.HubId)
+			log.Printf("Hub not found: %s", msg.Room_ID)
 		}
 	}
 }
@@ -124,7 +117,7 @@ func (c *Client) handleOutgoingMessages() {
 				return
 			}
 
-			// log.Println("receiving: ", string(message))
+			log.Println("sending: ", string(message))
 
 			w.Write(message)
 			w.Write(NEW_LINE)
@@ -166,8 +159,8 @@ func serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, cli
 	hub.register <- client
 
 	payload := MessagePayload{
-		Username: "!server",
-		Content:  join_message,
+		User_ID: "!server",
+		Content: join_message,
 	}
 
 	jsonPayload, err := json.Marshal(payload)

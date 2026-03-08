@@ -1,20 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"sort"
 
 	"github.com/google/uuid"
 )
 
-type Message struct {
-	id      string
-	content string
-}
-
 type Hub struct {
 	hub_id      string
-	messages    []Message
+	messages    []MessagePayload
 	Clients     map[*Client]bool //create a map with key value pairs --- Client - bool
 	broadcaster chan []byte
 
@@ -87,7 +83,7 @@ func (hm *HubManager) getHubListIds() []string {
 func newHub(id string) *Hub {
 	return &Hub{
 		hub_id:       id,
-		messages:     make([]Message, 0),
+		messages:     make([]MessagePayload, 0),
 		Clients:      make(map[*Client]bool),
 		broadcaster:  make(chan []byte),
 		register:     make(chan *Client),
@@ -119,7 +115,7 @@ func (h *Hub) run() {
 
 			for _, msg := range h.messages {
 				select {
-				case client.send <- []byte(msg.content):
+				case client.send <- []byte(msg.Content):
 				default:
 					break
 				}
@@ -137,14 +133,17 @@ func (h *Hub) run() {
 				}
 			}
 		case message := <-h.broadcaster:
+			var payload MessagePayload
+			if err := json.Unmarshal(message, &payload); err != nil {
+				log.Println("Error when extracting message payload: ", err)
+				continue
+			}
+
 			for client := range h.Clients {
 				select {
 				case client.send <- message:
 					//store message
-					h.messages = append(h.messages, Message{
-						id:      "mock-id",
-						content: string(message),
-					})
+					h.messages = append(h.messages, payload)
 				default:
 					close(client.send)
 					delete(h.Clients, client)
