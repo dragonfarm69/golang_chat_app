@@ -6,13 +6,35 @@ interface ChatDataContextType {
     messages: Message[],
     saveChatData: (data: Message) => Promise<void>,
     deleteChatData: (id: string) => Promise<void>,
+    updateMessage: (origional_message_id: string, new_data: Message) => Promise<void>,
 }
 
 const chatDataContext = createContext<ChatDataContextType | undefined>(undefined);
 
 export const ChatDataProvider = ({children}: {children: ReactNode}) => {
     const [messages, setMessages] = useState<Message[]>([]);
-    
+
+    async function updateMessage (origional_message_id: string, new_data: Message) {
+        try {
+            // if updating the id, we delete and create new one
+            if(origional_message_id != new_data.id) {
+                await db.messages.delete(origional_message_id)
+                await db.messages.add(new_data)
+            }
+            else {
+                const message_to_update = await db.messages.where("id").equals(origional_message_id).first()
+                if(message_to_update) {
+                    await db.messages.update(message_to_update.id, {
+                        ...new_data,
+                    })
+                }
+            }
+            
+        }
+        catch(e) {
+            console.log("An error has occured when trying to update data in DB: ", e)
+        }
+    }
 
     async function saveChatData(data: Message) {
         try {
@@ -38,6 +60,7 @@ export const ChatDataProvider = ({children}: {children: ReactNode}) => {
         <chatDataContext.Provider value={{
             saveChatData,
             deleteChatData,
+            updateMessage,
             messages
         }}>
             {children}

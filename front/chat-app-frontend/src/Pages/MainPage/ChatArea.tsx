@@ -1,17 +1,10 @@
 import { useRef, useEffect } from "react";
 import { DroppableZone } from "../../Components/DroppableZone";
-
-interface Message {
-  id: number;
-  user: string;
-  text: string;
-  sender: "me" | "other";
-  timestamp: string;
-}
+import { MessagePayload } from "../../bindings";
 
 interface ChatAreaProps {
-  selectedRoom: { id: number; name: string; icon: string };
-  messages: Message[];
+  selectedRoom: { id: string; name: string};
+  messages: MessagePayload[];
   newMessage: string;
   onMessageChange: (value: string) => void;
   onSendMessage: (e: React.FormEvent) => void;
@@ -36,9 +29,9 @@ export function ChatArea({
     <div className="chat-area">
       <div className="chat-log" ref={chatLogRef}>
         {messages.map((msg) => (
-          <div key={msg.id} className={`chat-message ${msg.sender}`}>
-            <div className="message-user">{msg.user}</div>
-            <div className="message-text">{msg.text}</div>
+          <div key={msg.id} className={`chat-message ${msg.user_id}`}>
+            <div className="message-user">{msg.user_id}</div>
+            <div className="message-text">{msg.content}</div>
           </div>
         ))}
       </div>

@@ -17,6 +17,7 @@ const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
 const REDIRECT_URL: &str = env!("REDIRECT_URL");
 const TOKEN_URL: &str = env!("TOKEN_URL");
 const CLIENT_ID: &str = env!("CLIENT_ID");
+const BACKEND_URL: &str = std::env!("BACKEND_URL");
 
 #[tauri::command]
 #[specta::specta]
@@ -45,6 +46,15 @@ pub struct MessagePayload {
     pub content: String,
     pub timeStamp: String,
     pub action: String,
+}
+
+#[derive(Serialize, Deserialize, Type)]
+pub struct RoomLitePayload {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[tauri::command]
@@ -240,10 +250,28 @@ async fn send_message(state: State<'_, WsSender>, message: MessagePayload) -> Re
     }
 }
 
-// #[tauri::command]
-// async fn request_message(room_id: string) -> Result<(), String> {
-    
-// }
+#[tauri::command]
+#[specta::specta]
+async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, String> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/fetch_rooms?user_id={}", BACKEND_URL, user_id);
+    let res = client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+    if res.status().is_success() {
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        let rooms: Vec<RoomLitePayload> = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        Ok(rooms)
+        // Ok(res.text().await.map_err(|e| e.to_string())?)
+    } else {
+        let error_body = res.text().await.unwrap_or_else(|_| "Cannot read error body".to_string());
+        println!("{}", error_body);
+        Err(format!("Error when fetching token: {}", error_body))
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -261,6 +289,7 @@ pub fn run() {
             checkAuth,
             establish_ws,
             send_message,
+            fetch_rooms_list,
         ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds

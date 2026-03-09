@@ -64,6 +64,14 @@ async sendMessage(message: MessagePayload) : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async fetchRoomsList(userId: string) : Promise<Result<RoomLitePayload[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("fetch_rooms_list", { userId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -78,6 +86,7 @@ async sendMessage(message: MessagePayload) : Promise<Result<null, string>> {
 /** user-defined types **/
 
 export type MessagePayload = { id: string; user_id: string; room_id: string; content: string; timeStamp: string; action: string }
+export type RoomLitePayload = { id: string; name: string; description: string; created_at: string; updated_at: string }
 
 /** tauri-specta globals **/
 

@@ -26,165 +26,7 @@ import { useChatData } from "../../Context/DataContext";
 import { Message } from "../../db";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { commands, MessagePayload } from "../../bindings";
-
-const initialRoomsData = [
-  { id: 1, name: "General", icon: "G" },
-  { id: 2, name: "Tech Talk", icon: "T" },
-  { id: 3, name: "Project Phoenix", icon: "P" },
-  { id: 4, name: "Random", icon: "R" },
-  { id: 5, name: "Gaming", icon: "GM" },
-  { id: 6, name: "Music", icon: "MS" },
-  { id: 7, name: "Art", icon: "ART" },
-  { id: 8, name: "Food", icon: "FD" },
-];
-
-const initialMessages: { [key: number]: any[] } = {
-  1: [
-    // General
-    {
-      id: 1,
-      user: "Alice",
-      text: "Hey everyone!",
-      sender: "other",
-      timestamp: "10:30 AM",
-    },
-    {
-      id: 2,
-      user: "You",
-      text: "Hi Alice! How are you?",
-      sender: "me",
-      timestamp: "10:31 AM",
-    },
-    {
-      id: 3,
-      user: "Bob",
-      text: "Welcome to the chat!",
-      sender: "other",
-      timestamp: "10:32 AM",
-    },
-  ],
-  2: [
-    // Tech Talk
-    {
-      id: 1,
-      user: "Charlie",
-      text: "Has anyone tried the new React 19 features?",
-      sender: "other",
-      timestamp: "11:00 AM",
-    },
-    {
-      id: 2,
-      user: "You",
-      text: "Not yet, but I'm excited about the compiler.",
-      sender: "me",
-      timestamp: "11:01 AM",
-    },
-  ],
-  3: [
-    // Project Phoenix
-    {
-      id: 1,
-      user: "Diana",
-      text: "Weekly sync: What's everyone's status?",
-      sender: "other",
-      timestamp: "09:00 AM",
-    },
-    {
-      id: 2,
-      user: "Eve",
-      text: "I've pushed the latest updates to the auth branch.",
-      sender: "other",
-      timestamp: "09:02 AM",
-    },
-    {
-      id: 3,
-      user: "You",
-      text: "I'll be reviewing them this morning.",
-      sender: "me",
-      timestamp: "09:03 AM",
-    },
-  ],
-  4: [
-    // Random
-    {
-      id: 1,
-      user: "Frank",
-      text: "What's a good movie to watch this weekend?",
-      sender: "other",
-      timestamp: "03:45 PM",
-    },
-  ],
-  5: [
-    // Gaming
-    {
-      id: 1,
-      user: "Gamer1",
-      text: "Anyone up for a match later?",
-      sender: "other",
-      timestamp: "07:15 PM",
-    },
-    {
-      id: 2,
-      user: "You",
-      text: "I'm in! What game?",
-      sender: "me",
-      timestamp: "07:16 PM",
-    },
-  ],
-  6: [
-    // Music
-    {
-      id: 1,
-      user: "MusicLover",
-      text: "Check out this new album, it's amazing!",
-      sender: "other",
-      timestamp: "02:30 PM",
-    },
-  ],
-  7: [
-    // Art
-    {
-      id: 1,
-      user: "Artist123",
-      text: "Just finished my digital painting!",
-      sender: "other",
-      timestamp: "01:20 PM",
-    },
-    {
-      id: 2,
-      user: "You",
-      text: "That looks incredible! What software did you use?",
-      sender: "me",
-      timestamp: "01:22 PM",
-    },
-  ],
-  8: [
-    // Food
-    {
-      id: 1,
-      user: "Foodie",
-      text: "Anyone know a good recipe for pasta carbonara?",
-      sender: "other",
-      timestamp: "12:15 PM",
-    },
-    {
-      id: 2,
-      user: "ChefMike",
-      text: "I've got the perfect one! DM me.",
-      sender: "other",
-      timestamp: "12:17 PM",
-    },
-    {
-      id: 3,
-      user: "You",
-      text: "I'd love to try it too!",
-      sender: "me",
-      timestamp: "12:18 PM",
-    },
-  ],
-};
-
+import { commands, MessagePayload, RoomLitePayload } from "../../bindings";
 
 function HomePage() {
   const isConnected = useRef(false);
@@ -193,9 +35,9 @@ function HomePage() {
   const [buttonFlashing, setIsButtonFlashing] = useState<Set<String>>(new Set()); // to track which button should be flashing at the moment
 
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [rooms, setRooms] = useState(initialRoomsData);
-  const [allMessages, setAllMessages] = useState(initialMessages);
-  const [newMessage, setNewMessage] = useState<{ [key: number]: string }>({});
+  const [rooms, setRooms] = useState<RoomLitePayload[]>([]);
+  const [allMessages, setAllMessages] = useState<{ [key: string]: MessagePayload[] }>({});
+  const [newMessage, setNewMessage] = useState<{ [key: string]: string }>({});
   const [isJoinRoomPopupOpen, setIsJoinRoomPopupOpen] = useState(false);
 
   const [selectedRooms, setSelectedRooms] = useState([rooms[0]]);
@@ -204,9 +46,9 @@ function HomePage() {
   const [currentRegion, setCurrentRegion] = useState<REGION>(null);
   const [currentRegionId, setCurrentRegionID] = useState<String | null>(null);
 
-  const { saveChatData, deleteChatData } = useChatData();
+  const { saveChatData, deleteChatData, updateMessage } = useChatData();
 
-  const handleSendMessage = (roomId: number) => (e: React.FormEvent) => {
+  const handleSendMessage = (roomId: string) => (e: React.FormEvent) => {
     e.preventDefault();
     const messageText = newMessage[roomId] || "";
 
@@ -218,18 +60,6 @@ function HomePage() {
     const tempId = crypto.randomUUID();
 
     if (messageText.trim() === "") return;
-    const message = {
-      id: (allMessages[roomId]?.length || 0) + 1,
-      user: "You",
-      text: messageText,
-      sender: "me" as const,
-      timestamp: timestamp
-    };
-    setAllMessages((prevMessages) => ({
-      ...prevMessages,
-      [roomId]: [...(prevMessages[roomId] || []), message],
-    }));
-    setNewMessage("");
 
     const messagePayload: MessagePayload = {
       id: tempId,
@@ -240,20 +70,26 @@ function HomePage() {
       action: "SEND"
     }
 
+    setAllMessages((prevMessages) => ({
+      ...prevMessages,
+      [roomId]: [...(prevMessages[roomId] || []), messagePayload],
+    }));
+    setNewMessage((prev) => ({ ...prev, [roomId]: "" }));
+
     commands.sendMessage(messagePayload);
 
     //save to indexDB
     const dbMessage: Message = {
       id: crypto.randomUUID(),
       room_id: roomId.toString(),
-      user_id: "me",
+      user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
       content: messageText,
       timeStamp: timestamp,
     }
     saveChatData(dbMessage)
   };
 
-  const handleMessageChange = (roomId: number) => (value: string) => {
+  const handleMessageChange = (roomId: string) => (value: string) => {
     setNewMessage((prev) => ({ ...prev, [roomId]: value }));
   };
 
@@ -265,7 +101,6 @@ function HomePage() {
     setIsJoinRoomPopupOpen(false);
   };
 
-  //async fn establish_ws(app: tauri::AppHandle, state: State<'_, WsSender>, user_id: String) -> Result<(), String> {
   useEffect(() => {
     if(!isConnected.current) {
       invoke("establish_ws", {
@@ -274,9 +109,30 @@ function HomePage() {
         isConnected.current = true;
       }).catch(console.error)
     }
+
+    //fetch room list 
+    async function fetchRoomList() {
+      const roomList = await commands.fetchRoomsList("ff43172a-4a24-4b51-be63-73cc8aee62ba");
+      console.log(roomList);
+    }
+
+    fetchRoomList()
     
+    // Object Prototype
+    // Listen to WS messages
     const unlisten = listen("ws-message", (event) => {
       const msg = JSON.parse(event.payload as string)
+
+      const new_msg_data: Message = {
+        id: msg.id,
+        user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+        room_id: msg.room_id,
+        content: msg.content,
+        timeStamp: msg.timeStamp
+      }
+      updateMessage(msg.original_id, new_msg_data)
+
+      // updateMessage(, msg as Message)
       console.log("receiving: ", msg)
     })
 
@@ -562,7 +418,7 @@ function HomePage() {
                           : undefined,
                       }}
                     >
-                      {room.icon}
+                      {"r"}
                     </RoomButton>
                   ))}
                 </SortableContext>
@@ -593,7 +449,7 @@ function HomePage() {
                       )}
                     </div>
                     <ChatArea
-                      selectedRoom={room}
+                      selectedRoom={{ id: room.id, name: room.name }}
                       messages={allMessages[room.id] || []}
                       newMessage={newMessage[room.id] || ""}
                       onMessageChange={handleMessageChange(room.id)}
@@ -655,7 +511,7 @@ function HomePage() {
                     : undefined,
                 }}
               >
-                {activeRoom.icon}
+                {"R"}
               </div>
             ) : null}
           </DragOverlay>

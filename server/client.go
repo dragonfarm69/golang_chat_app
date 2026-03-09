@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -38,6 +39,16 @@ type MessagePayload struct {
 	Content   string `json:"content"`
 	TimeStamp string `json:"timeStamp"`
 	Action    string `json:"action"`
+}
+
+type ResponseMessagePayload struct {
+	OriginalId string `json:"original_id"`
+	Id         string `json:"id"`
+	User_ID    string `json:"user_id"`
+	Room_ID    string `json:"room_id"`
+	Content    string `json:"content"`
+	TimeStamp  string `json:"timeStamp"`
+	Action     string `json:"action"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -84,7 +95,20 @@ func (c *Client) handleIncomingMessages() {
 					hub.register <- c
 				}
 			case "SEND":
-				jsonPayload, err := json.Marshal(msg)
+				//generate new Id
+				messageId := uuid.New().String()
+
+				responsePayload := &ResponseMessagePayload{
+					OriginalId: msg.Id,
+					Id:         messageId,
+					User_ID:    msg.User_ID,
+					Room_ID:    msg.Room_ID,
+					Content:    msg.Content,
+					Action:     msg.Action,
+					TimeStamp:  msg.TimeStamp,
+				}
+
+				jsonPayload, err := json.Marshal(responsePayload)
 				if err != nil {
 					log.Println("Error when marshalling payload: ", err)
 					return
