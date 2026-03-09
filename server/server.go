@@ -48,15 +48,18 @@ func (hm *HubManager) unregisterFromAll(client *Client) {
 	}
 }
 
-func (hm *HubManager) createNewHub(hub_name string) string {
-	id := uuid.New() //generate uuid for the room
-	log.Println("new ID: ", id.String())
-	hub := newHub(id.String())
+func (hm *HubManager) createNewHub(hub_id string) string {
+	hub := newHub(hub_id)
 
-	hm.hubs[id] = hub
+	hub_uuid, err := uuid.Parse(hub_id)
+	if err != nil {
+		log.Println("error when converting to uuid:", hub_id)
+		return ""
+	}
+	hm.hubs[hub_uuid] = hub
 	go hub.run()
 
-	return id.String()
+	return hub_id
 }
 
 func (hm *HubManager) getHub(hub_uuid_string string) *Hub {
@@ -99,7 +102,7 @@ func (h *Hub) disconnectClient(clientId string) {
 func (h *Hub) isClientExists(clientId string) bool {
 	// log.Println("Checking for lcient")
 	for c := range h.Clients {
-		if c.name == clientId {
+		if c.id == clientId {
 			return true
 		}
 	}

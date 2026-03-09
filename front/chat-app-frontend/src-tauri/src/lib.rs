@@ -8,6 +8,10 @@ use tauri::{Emitter, Manager, State};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
+use tauri_specta::{collect_commands, Builder};
+use serde::Deserialize;
+use specta::Type;
+use specta_typescript::Typescript;
 
 const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
 const REDIRECT_URL: &str = env!("REDIRECT_URL");
@@ -15,6 +19,7 @@ const TOKEN_URL: &str = env!("TOKEN_URL");
 const CLIENT_ID: &str = env!("CLIENT_ID");
 
 #[tauri::command]
+#[specta::specta]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -32,7 +37,18 @@ struct UserAccountPayload {
     email: String,
 }
 
+#[derive(Serialize, Deserialize, Type)]
+pub struct MessagePayload {
+    pub id: String,
+    pub user_id: String,
+    pub room_id: String,
+    pub content: String,
+    pub timeStamp: String,
+    pub action: String,
+}
+
 #[tauri::command]
+#[specta::specta]
 async fn register_account(first_name: String, last_name: String, password: String, email: String) -> Result<String, String> {
     //create user payload
     let payload = UserAccountPayload{
@@ -59,6 +75,7 @@ async fn register_account(first_name: String, last_name: String, password: Strin
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn fetch_token(code: String, verifier: String) -> Result<String, String>{
     let client = reqwest::Client::new();
 
@@ -87,6 +104,7 @@ async fn fetch_token(code: String, verifier: String) -> Result<String, String>{
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn fetch_account_info(access_token: String) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -112,6 +130,7 @@ fn save_data_to_keyring(name: String, data: String) -> Result<(), keyring::Error
 }
 
 #[tauri::command]
+#[specta::specta]
 fn get_data_from_keyring(name: String) -> Result<String, String> {
     let entry = Entry::new("chat-app-service", &name).map_err(|e| e.to_string())?;
     entry.get_password().map_err(|e| e.to_string())
@@ -124,6 +143,7 @@ fn delete_data_in_keyring(name: String) -> Result<(), keyring::Error> {
 }
  
 #[tauri::command]
+#[specta::specta]
 async fn login(access_token: String, refresh_token: String) -> bool {
     if save_data_to_keyring("access_token".to_string(), access_token.to_string()).is_ok() &&
         save_data_to_keyring("refresh_token".to_string(), refresh_token.to_string()).is_ok() {
@@ -140,6 +160,7 @@ async fn login(access_token: String, refresh_token: String) -> bool {
 } 
 
 #[tauri::command]
+#[specta::specta]
 async fn logout() -> bool {
     if(delete_data_in_keyring("access_token".to_string()).is_ok() && 
         delete_data_in_keyring("refresh_token".to_string()).is_ok()) {
@@ -149,6 +170,7 @@ async fn logout() -> bool {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn checkAuth() -> bool {
     if let Ok(access_token) = get_data_from_keyring("access_token".to_string()) {
         let is_ok = fetch_account_info(access_token).await.is_ok();
@@ -160,13 +182,14 @@ async fn checkAuth() -> bool {
 }
 
 #[tauri::command]
+#[specta::specta]
 async fn establish_ws(app: tauri::AppHandle, state: State<'_, WsSender>, user_id: String) -> Result<(), String> {
     //NOTE: use wss for production which is more secured
     let url = format!("ws://localhost:8080/ws?user_id={}", user_id);
 
     let (ws_stream, _) = connect_async(&url)
-                                                                .await
-                                                                .map_err(|e| e.to_string())?;
+                            .await
+                            .map_err(|e| e.to_string())?;
     
 
     let (mut write, mut read) = ws_stream.split();
@@ -204,25 +227,30 @@ async fn establish_ws(app: tauri::AppHandle, state: State<'_, WsSender>, user_id
 }
 
 #[tauri::command]
-async fn send_message(state: State<'_, WsSender>, message: String) -> Result<(), String> {
+#[specta::specta]
+async fn send_message(state: State<'_, WsSender>, message: MessagePayload) -> Result<(), String> {
     //lock the mutex
     let sender = state.0.lock().await;
     if let Some(tx) = sender.as_ref() {
-        tx.send(message).map_err(|e| e.to_string())?;
+        let json = serde_json::to_string(&message).map_err(|e| e.to_string())?;
+        tx.send(json).map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Something is wrong with websocker connection".to_string())
     }
 }
 
+// #[tauri::command]
+// async fn request_message(room_id: string) -> Result<(), String> {
+    
+// }
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     dotenvy::dotenv().ok();
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .manage(WsSender(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![
+
+    let mut specta_builder = Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
             greet,
             register_account,
             fetch_token,
@@ -233,7 +261,22 @@ pub fn run() {
             checkAuth,
             establish_ws,
             send_message,
-        ])
+        ]);
+
+    #[cfg(debug_assertions)] // <- Only export on non-release builds
+    specta_builder
+        .export(Typescript::default(), "../src/bindings.ts")
+        .expect("Failed to export typescript bindings");
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .manage(WsSender(Mutex::new(None)))
+        .invoke_handler(specta_builder.invoke_handler()) 
+        .setup(move |app| {
+            specta_builder.mount_events(app);
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

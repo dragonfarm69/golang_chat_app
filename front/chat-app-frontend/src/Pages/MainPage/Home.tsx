@@ -1,5 +1,5 @@
 import "../../App.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import JoinRoomPopUp from "./JoinRoomPopUp";
 import {
   DndContext,
@@ -24,6 +24,9 @@ import { DroppableZone, REGION } from "../../Components/DroppableZone";
 import { ChatArea } from "./ChatArea";
 import { useChatData } from "../../Context/DataContext";
 import { Message } from "../../db";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { commands, MessagePayload } from "../../bindings";
 
 const initialRoomsData = [
   { id: 1, name: "General", icon: "G" },
@@ -184,6 +187,7 @@ const initialMessages: { [key: number]: any[] } = {
 
 
 function HomePage() {
+  const isConnected = useRef(false);
   const BUTTON_FLASHING_ANIMATION_TIMER = 2000;
   const ROOMS_CAP = 6 // the amount of rooms can be opened at the same time
   const [buttonFlashing, setIsButtonFlashing] = useState<Set<String>>(new Set()); // to track which button should be flashing at the moment
@@ -210,6 +214,8 @@ function HomePage() {
       hour: "2-digit",
       minute: "2-digit",
     });
+    
+    const tempId = crypto.randomUUID();
 
     if (messageText.trim() === "") return;
     const message = {
@@ -224,6 +230,17 @@ function HomePage() {
       [roomId]: [...(prevMessages[roomId] || []), message],
     }));
     setNewMessage("");
+
+    const messagePayload: MessagePayload = {
+      id: tempId,
+      user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+      room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
+      content: messageText,
+      timeStamp: timestamp,
+      action: "SEND"
+    }
+
+    commands.sendMessage(messagePayload);
 
     //save to indexDB
     const dbMessage: Message = {
@@ -248,18 +265,49 @@ function HomePage() {
     setIsJoinRoomPopupOpen(false);
   };
 
+  //async fn establish_ws(app: tauri::AppHandle, state: State<'_, WsSender>, user_id: String) -> Result<(), String> {
+  useEffect(() => {
+    if(!isConnected.current) {
+      invoke("establish_ws", {
+        userId: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+      }).then(() => {
+        isConnected.current = true;
+      }).catch(console.error)
+    }
+    
+    const unlisten = listen("ws-message", (event) => {
+      const msg = JSON.parse(event.payload as string)
+      console.log("receiving: ", msg)
+    })
+
+    return() => {
+      unlisten.then((stop) => stop());
+    };
+  }, [])
+
   const handleRoomSelect = (room: (typeof rooms)[0], location?: string, droppedOnRoomWithId?: string) => {
     //prevent user from opening more room
     if (selectedRooms.length === ROOMS_CAP) {
       return
     }
-
+    
     const roomIndex = selectedRooms.findIndex(
       (r) => r.id.toString() === room.id.toString(),
     );
-
+    
     //not found
     if (roomIndex === -1) {
+      const tempId = crypto.randomUUID();
+      const messagePayload: MessagePayload = {
+        id: tempId,
+        user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+        room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
+        content: "",
+        timeStamp: "",
+        action: "JOIN"
+      }
+      commands.sendMessage(messagePayload);
+      
       if(location) {
         //get the needed index to add the chat room to rooms
         const dropIndex = selectedRooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId)
@@ -302,6 +350,7 @@ function HomePage() {
     } else {
       setActiveRoomIndex(roomIndex);
     }
+
   };
 
   const handleCloseRoom = (roomsId: string) => {

@@ -2,12 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -23,8 +21,7 @@ var (
 )
 
 type Client struct {
-	name string
-	id   string
+	id string
 
 	// hub *Hub
 	hubs *HubManager
@@ -40,6 +37,7 @@ type MessagePayload struct {
 	Room_ID   string `json:"room_id"`
 	Content   string `json:"content"`
 	TimeStamp string `json:"timeStamp"`
+	Action    string `json:"action"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -79,19 +77,29 @@ func (c *Client) handleIncomingMessages() {
 
 		hub := c.hubs.getHub(msg.Room_ID)
 		if hub != nil {
-			//register client to that hub if not found
-			if _, ok := hub.Clients[c]; !ok {
-				hub.register <- c
+			switch msg.Action {
+			case "JOIN":
+				//register client to that hub if not found
+				if _, ok := hub.Clients[c]; !ok {
+					hub.register <- c
+				}
+			case "SEND":
+				jsonPayload, err := json.Marshal(msg)
+				if err != nil {
+					log.Println("Error when marshalling payload: ", err)
+					return
+				}
+				hub.broadcaster <- jsonPayload
 			}
 
-			jsonPayload, err := json.Marshal(msg)
-			if err != nil {
-				log.Println("Error when marshalling payload: ", err)
-				return
-			}
-			hub.broadcaster <- jsonPayload
 		} else {
 			log.Printf("Hub not found: %s", msg.Room_ID)
+			log.Printf("Creating hub with id: %s", msg.Room_ID)
+			c.hubs.createNewHub(msg.Room_ID)
+			hub := c.hubs.getHub(msg.Room_ID)
+			if hub != nil {
+				hub.register <- c
+			}
 		}
 	}
 }
@@ -140,35 +148,15 @@ func (c *Client) handleOutgoingMessages() {
 	}
 }
 
-func serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, client_name string, hub *Hub) {
+func serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, client_id string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
-	var join_message = fmt.Sprintf("%s joined the room", client_name)
 
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	// create a new client
-	client_uuid := uuid.NewSHA1(uuid.NameSpaceDNS, []byte(client_name))
-	client := &Client{name: client_name, id: client_uuid.String(), hubs: hubManager, connection: conn, send: make(chan []byte, 256)}
-
-	//register client to a hub
-	// client.hub.register <- client
-	// client.hub.broadcaster <- join_message
-	hub.register <- client
-
-	payload := MessagePayload{
-		User_ID: "!server",
-		Content: join_message,
-	}
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		log.Println("Error when marshalling payload: ", err)
-		return
-	}
-	hub.broadcaster <- jsonPayload
+	client := &Client{id: client_id, hubs: hubManager, connection: conn, send: make(chan []byte, 256)}
 
 	go client.handleIncomingMessages()
 	go client.handleOutgoingMessages()

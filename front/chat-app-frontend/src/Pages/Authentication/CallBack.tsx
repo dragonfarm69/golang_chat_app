@@ -35,7 +35,9 @@ function CallBackPage() {
                 await store.set("email", userData.email);
                 await store.set("username", userData.name);
                 await store.save(); // persist the store to disk
-                navigate("/join");
+
+                //this should lead to home page
+                navigate("/");
             }
             catch (error) {
                 console.log(error)

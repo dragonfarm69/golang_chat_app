@@ -19,7 +19,7 @@ tauri-build = { version = "2", features = [] }
 dotenvy = "0.15"
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2.0", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -30,3 +30,6 @@ keyring = "3.6.3"
 tokio-tungstenite = "0.28"
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3.32"
+tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
+specta = "=2.0.0-rc.22"
+specta-typescript = "0.0.9"
