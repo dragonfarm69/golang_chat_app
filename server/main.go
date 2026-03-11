@@ -161,6 +161,30 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(rooms)
 	})
+	mux.HandleFunc("/fetch_room_message", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		room_id := r.URL.Query().Get("room_id")
+
+		if room_id == "" {
+			http.Error(w, "Can't be empty", http.StatusNotFound)
+			return
+		}
+
+		ctx := r.Context()
+		rooms, err := fetchRoomMessage(ctx, room_id)
+		log.Println(rooms)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Failed to fetch room list", http.StatusInternalServerError)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(rooms)
+	})
 
 	//Configure CORS
 	c := cors.New(cors.Options{

@@ -26,21 +26,30 @@ import { useChatData } from "../../Context/DataContext";
 import { Message } from "../../db";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { commands, MessagePayload, RoomLitePayload } from "../../bindings";
+import {
+  commands,
+  MessagePayload,
+  MessageResponse,
+  RoomLitePayload,
+} from "../../bindings";
 
 function HomePage() {
   const isConnected = useRef(false);
   const BUTTON_FLASHING_ANIMATION_TIMER = 2000;
-  const ROOMS_CAP = 6 // the amount of rooms can be opened at the same time
-  const [buttonFlashing, setIsButtonFlashing] = useState<Set<String>>(new Set()); // to track which button should be flashing at the moment
+  const ROOMS_CAP = 6; // the amount of rooms can be opened at the same time
+  const [buttonFlashing, setIsButtonFlashing] = useState<Set<String>>(
+    new Set(),
+  ); // to track which button should be flashing at the moment
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [rooms, setRooms] = useState<RoomLitePayload[]>([]);
-  const [allMessages, setAllMessages] = useState<{ [key: string]: MessagePayload[] }>({});
+  const [allMessages, setAllMessages] = useState<{
+    [key: string]: MessageResponse[];
+  }>({});
   const [newMessage, setNewMessage] = useState<{ [key: string]: string }>({});
   const [isJoinRoomPopupOpen, setIsJoinRoomPopupOpen] = useState(false);
 
-  const [selectedRooms, setSelectedRooms] = useState([rooms[0]]);
+  const [selectedRooms, setSelectedRooms] = useState<RoomLitePayload[]>([]);
   const [activeRoomIndex, setActiveRoomIndex] = useState(0); // for knowing which room is in focus
 
   const [currentRegion, setCurrentRegion] = useState<REGION>(null);
@@ -56,7 +65,7 @@ function HomePage() {
       hour: "2-digit",
       minute: "2-digit",
     });
-    
+
     const tempId = crypto.randomUUID();
 
     if (messageText.trim() === "") return;
@@ -67,12 +76,20 @@ function HomePage() {
       room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
       content: messageText,
       timeStamp: timestamp,
-      action: "SEND"
-    }
+      action: "SEND",
+    };
+
+    const messageResponse: MessageResponse = {
+      id: tempId,
+      owner_name: "me",
+      room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
+      content: messageText,
+      timeStamp: timestamp,
+    };
 
     setAllMessages((prevMessages) => ({
       ...prevMessages,
-      [roomId]: [...(prevMessages[roomId] || []), messagePayload],
+      [roomId]: [...(prevMessages[roomId] || []), messageResponse],
     }));
     setNewMessage((prev) => ({ ...prev, [roomId]: "" }));
 
@@ -85,8 +102,8 @@ function HomePage() {
       user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
       content: messageText,
       timeStamp: timestamp,
-    }
-    saveChatData(dbMessage)
+    };
+    saveChatData(dbMessage);
   };
 
   const handleMessageChange = (roomId: string) => (value: string) => {
@@ -102,73 +119,104 @@ function HomePage() {
   };
 
   useEffect(() => {
-    if(!isConnected.current) {
+    if (!isConnected.current) {
       invoke("establish_ws", {
         userId: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
-      }).then(() => {
-        isConnected.current = true;
-      }).catch(console.error)
+      })
+        .then(() => {
+          isConnected.current = true;
+        })
+        .catch(console.error);
     }
 
-    //fetch room list 
+    //fetch room list
     async function fetchRoomList() {
-      const roomList = await commands.fetchRoomsList("ff43172a-4a24-4b51-be63-73cc8aee62ba");
-      console.log(roomList);
+      const roomList = await commands.fetchRoomsList(
+        "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+      );
+      if (roomList.status === "ok") {
+        console.log("hello: ", roomList.data);
+        if (roomList.data != null) {
+          setRooms((prev) => [...prev, ...roomList.data]);
+        }
+      } else {
+        console.error("Error fetching rooms: ", roomList.error);
+      }
     }
 
-    fetchRoomList()
-    
+    fetchRoomList();
+
     // Object Prototype
     // Listen to WS messages
     const unlisten = listen("ws-message", (event) => {
-      const msg = JSON.parse(event.payload as string)
+      const msg = JSON.parse(event.payload as string);
 
       const new_msg_data: Message = {
         id: msg.id,
         user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
         room_id: msg.room_id,
         content: msg.content,
-        timeStamp: msg.timeStamp
-      }
-      updateMessage(msg.original_id, new_msg_data)
+        timeStamp: msg.timeStamp,
+      };
+      updateMessage(msg.original_id, new_msg_data);
 
       // updateMessage(, msg as Message)
-      console.log("receiving: ", msg)
-    })
+      console.log("receiving: ", msg);
+    });
 
-    return() => {
+    return () => {
       unlisten.then((stop) => stop());
     };
-  }, [])
+  }, []);
 
-  const handleRoomSelect = (room: (typeof rooms)[0], location?: string, droppedOnRoomWithId?: string) => {
+  const handleRoomSelect = async (
+    room: (typeof rooms)[0],
+    location?: string,
+    droppedOnRoomWithId?: string,
+  ) => {
     //prevent user from opening more room
     if (selectedRooms.length === ROOMS_CAP) {
-      return
+      return;
     }
-    
+
     const roomIndex = selectedRooms.findIndex(
-      (r) => r.id.toString() === room.id.toString(),
+      (r) => r.id.toString() === room.id,
     );
-    
+
     //not found
     if (roomIndex === -1) {
       const tempId = crypto.randomUUID();
       const messagePayload: MessagePayload = {
         id: tempId,
         user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
-        room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
+        room_id: room.id,
         content: "",
         timeStamp: "",
-        action: "JOIN"
-      }
+        action: "JOIN",
+      };
       commands.sendMessage(messagePayload);
-      
-      if(location) {
+
+      const result = await commands.fetchRoomMessages(room.id);
+      if (result.status === "ok") {
+        console.log("hello: ", result.data);
+        if (result.data != null) {
+          setAllMessages((prev) => ({ ...prev, [room.id]: result.data }));
+        }
+      } else {
+        console.error("Error fetching rooms: ", result.error);
+      }
+      console.log("room_messages: ", result);
+
+      if (location) {
         //get the needed index to add the chat room to rooms
-        const dropIndex = selectedRooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId)
-        console.log(selectedRooms)
-        console.log("dropped on index: ", rooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId))
+        const dropIndex = selectedRooms.findIndex(
+          (r) => r.id.toString() === droppedOnRoomWithId,
+        );
+        console.log(selectedRooms);
+        console.log(
+          "dropped on index: ",
+          rooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId),
+        );
 
         switch (location) {
           case "top":
@@ -177,20 +225,19 @@ function HomePage() {
             break;
           case "left":
             setSelectedRooms((prev) => {
-              const newRooms = [...prev]
-              newRooms.splice(dropIndex, 0, room)
-              return newRooms
-            })
+              const newRooms = [...prev];
+              newRooms.splice(dropIndex, 0, room);
+              return newRooms;
+            });
             break;
           case "right":
-            if(dropIndex < selectedRooms.length) {
+            if (dropIndex < selectedRooms.length) {
               setSelectedRooms((prev) => {
-                const newRooms = [...prev]
-                newRooms.splice(dropIndex + 1, 0, room)
-                return newRooms
-              })
-            }
-            else {
+                const newRooms = [...prev];
+                newRooms.splice(dropIndex + 1, 0, room);
+                return newRooms;
+              });
+            } else {
               setSelectedRooms((prev) => [...prev, room]);
             }
             break;
@@ -198,15 +245,13 @@ function HomePage() {
             setSelectedRooms((prev) => [...prev, room]);
             break;
         }
-      }
-      else {
+      } else {
         setSelectedRooms((prev) => [...prev, room]);
       }
       setActiveRoomIndex(selectedRooms.length);
     } else {
       setActiveRoomIndex(roomIndex);
     }
-
   };
 
   const handleCloseRoom = (roomsId: string) => {
@@ -263,18 +308,18 @@ function HomePage() {
     if (y < height * threshold) {
       return "top";
     }
-      
+
     if (y > height * (1 - threshold)) {
       return "bottom";
-    } 
+    }
 
     if (x < width * threshold) {
       return "left";
-    } 
-    
+    }
+
     if (x > width * (1 - threshold)) {
       return "right";
-    } 
+    }
 
     return null;
   };
@@ -392,23 +437,23 @@ function HomePage() {
                       onClick={() => {
                         if (selectedRooms.length === ROOMS_CAP) {
                           //get the button id and set state
-                          setIsButtonFlashing(prev => {
+                          setIsButtonFlashing((prev) => {
                             const newSet = new Set(prev);
-                            newSet.add(room.id.toString())
+                            newSet.add(room.id.toString());
 
                             //set time out to reset the button state
                             setTimeout(() => {
-                              setIsButtonFlashing(prev => {
-                                const buttonSetAfterDelete = new Set(prev)
-                                buttonSetAfterDelete.delete(room.id.toString())
-                                return buttonSetAfterDelete
-                              })
-                            }, BUTTON_FLASHING_ANIMATION_TIMER)
+                              setIsButtonFlashing((prev) => {
+                                const buttonSetAfterDelete = new Set(prev);
+                                buttonSetAfterDelete.delete(room.id.toString());
+                                return buttonSetAfterDelete;
+                              });
+                            }, BUTTON_FLASHING_ANIMATION_TIMER);
                             return newSet;
-                          })
-                          return
+                          });
+                          return;
                         }
-                        handleRoomSelect(room)
+                        handleRoomSelect(room);
                       }}
                       style={{
                         backgroundColor: selectedRooms.some(
@@ -459,7 +504,7 @@ function HomePage() {
                 ))}
               </div>
 
-              { selectedRooms.length >= 4 &&
+              {selectedRooms.length >= 4 && (
                 <div className={"multi-chat-container"}>
                   {selectedRooms.slice(3, 6).map((room) => (
                     <DroppableZone
@@ -493,7 +538,7 @@ function HomePage() {
                     </DroppableZone>
                   ))}
                 </div>
-              }
+              )}
             </div>
           </div>
           <DragOverlay>

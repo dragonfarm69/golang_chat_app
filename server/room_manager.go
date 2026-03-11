@@ -27,6 +27,14 @@ type Room struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type RoomMessage struct {
+	Id         string `json:"id"`
+	Owner_name string `json:"owner_name"`
+	Room_ID    string `json:"room_id"`
+	Content    string `json:"content"`
+	TimeStamp  string `json:"timeStamp"`
+}
+
 func fetchFullRoomDataBasedOnRoomId(ctx context.Context, room_id string) (Room, error) {
 	schema := "chat"
 	if schema == "" {
@@ -128,4 +136,52 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 	}
 
 	return rooms, nil
+}
+
+func fetchRoomMessage(ctx context.Context, room_id string) ([]RoomMessage, error) {
+	schema := "chat"
+	if schema == "" {
+		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
+		schema = "public"
+	}
+	messagesTable := pgx.Identifier{schema, "messages"}.Sanitize()
+	usersTable := pgx.Identifier{schema, "users"}.Sanitize()
+
+	sql := fmt.Sprintf(`
+		SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at
+		FROM %s m
+		LEFT JOIN %s u ON m.user_id = u.id
+		WHERE m.room_id = $1
+		ORDER BY m.created_at ASC
+	`, messagesTable, usersTable)
+
+	rows, err := Pool.Query(ctx, sql, room_id)
+	if err != nil {
+		return nil, fmt.Errorf("Query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []RoomMessage
+
+	for rows.Next() {
+		var m RoomMessage
+		var createdAt time.Time
+		if err := rows.Scan(
+			&m.Id,
+			&m.Owner_name,
+			&m.Room_ID,
+			&m.Content,
+			&createdAt,
+		); err != nil {
+			return nil, fmt.Errorf("Failed to get room message: %w", err)
+		}
+		m.TimeStamp = createdAt.Format(time.RFC3339)
+		messages = append(messages, m)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("There's an error during iterating rows array: %w", err)
+	}
+
+	return messages, nil
 }
