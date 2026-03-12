@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -84,6 +85,19 @@ func (c *Client) handleIncomingMessages() {
 		if err := json.Unmarshal(message, &msg); err != nil {
 			log.Println("Error when parsing message: ", err)
 			continue
+		}
+
+		if msg.Action != "JOIN" {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			id, err := addNewMessageToDB(ctx, msg)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			log.Println("Saved message successfully with id: ", id)
 		}
 
 		hub := c.hubs.getHub(msg.Room_ID)

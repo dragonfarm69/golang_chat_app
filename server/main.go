@@ -203,6 +203,7 @@ func main() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Failed to fetch user info", http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
