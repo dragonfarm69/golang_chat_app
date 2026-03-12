@@ -28,14 +28,25 @@ fn greet(name: &str) -> String {
 
 struct WsSender(Mutex<Option<mpsc::UnboundedSender<String>>>);
 
-#[derive(Serialize)]
-struct UserAccountPayload {
-    #[serde(rename = "FirstName")]
-    first_name: String,
-    #[serde(rename = "LastName")]
-    last_name: String,
-    password: String,
-    email: String,
+// interface UserInfo {
+//   avatar_url?: string;
+//   name: string;
+//   id: string;
+//   email: string;
+//   status: string;
+// }
+
+// export default UserInfo;
+
+#[derive(Serialize, Deserialize, Type)]
+pub struct UserInfo {
+    pub id: String,
+    pub avatar_url: Option<String>,
+    pub email: String,
+    pub username: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Type)]
@@ -64,38 +75,6 @@ pub struct RoomLitePayload {
     pub description: String,
     pub created_at: String,
     pub updated_at: String,
-}
-
-#[tauri::command]
-#[specta::specta]
-async fn register_account(
-    first_name: String,
-    last_name: String,
-    password: String,
-    email: String,
-) -> Result<String, String> {
-    //create user payload
-    let payload = UserAccountPayload {
-        first_name,
-        last_name,
-        password,
-        email,
-    };
-
-    let client = reqwest::Client::new();
-
-    let res = client
-        .post(BACKEND_REGISTER_URL)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if res.status().is_success() {
-        Ok(res.text().await.map_err(|e| e.to_string())?)
-    } else {
-        Err(format!("Server responsded with error: {}", res.status()))
-    }
 }
 
 #[tauri::command]
@@ -132,7 +111,7 @@ async fn fetch_token(code: String, verifier: String) -> Result<String, String> {
 
 #[tauri::command]
 #[specta::specta]
-async fn fetch_account_info(access_token: String) -> Result<String, String> {
+async fn fetch_account_info(access_token: String) -> Result<UserInfo, String> {
     let client = reqwest::Client::new();
 
     let res = client
@@ -143,7 +122,24 @@ async fn fetch_account_info(access_token: String) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
-        Ok(res.text().await.map_err(|e| e.to_string())?)
+        let result = res.text().await.map_err(|e| e.to_string())?;
+        //get the user email from the keycloak
+        let user_data_keycloak: serde_json::Value =
+            serde_json::from_str(&result).map_err(|e| e.to_string())?;
+
+        let email = user_data_keycloak["email"]
+            .as_str()
+            .ok_or("Email not found in Keycloak response")?;
+
+        //fetch the info from the db
+        let url = format!("http://localhost:8080/fetch_user_info?username={}", email);
+        let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+
+        let user_info_db = res.text().await.map_err(|e| e.to_string())?;
+
+        let user_info: UserInfo = serde_json::from_str(&user_info_db).map_err(|e| e.to_string())?;
+
+        return Ok(user_info);
     } else {
         let error_body = res
             .text()
@@ -326,7 +322,6 @@ pub fn run() {
 
     let mut specta_builder = Builder::<tauri::Wry>::new().commands(collect_commands![
         greet,
-        register_account,
         fetch_token,
         fetch_account_info,
         login,

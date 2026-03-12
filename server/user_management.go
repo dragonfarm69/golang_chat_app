@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,12 +15,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 )
-
-type User struct {
-	ID       string
-	Username string
-	Email    string
-}
 
 type CredentialPayload struct {
 	Type      string `json:"type"`
@@ -46,11 +41,24 @@ type RegisterPayload struct {
 
 // UserModel for the database.
 type UserModel struct {
-	ID         string
-	Name       string
-	Username   string
-	Email      string
-	ProfileURL string
+	id         string
+	username   string
+	email      string
+	avatar_url sql.NullString
+	status     string
+	created_at time.Time
+	updated_at sql.NullTime
+}
+
+// use this for response to requests
+type UserPayload struct {
+	ID        string  `json:"id"`
+	Username  string  `json:"username"`
+	Email     string  `json:"email"`
+	AvatarURL *string `json:"avatar_url"` // Pointer = JSON null if nil
+	Status    string  `json:"status"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt *string `json:"updated_at"` // Pointer for optional dates
 }
 
 func createUserOnDB(ctx context.Context, user RegisterPayload, userId string) error {
@@ -157,4 +165,52 @@ func createNewUser(ctx context.Context, adminClient *http.Client, user RegisterP
 	}
 
 	return nil
+}
+
+func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
+	schema := "chat"
+	if schema == "" {
+		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
+		schema = "public"
+	}
+	table := pgx.Identifier{schema, "users"}.Sanitize()
+
+	sql := fmt.Sprintf(`
+		SELECT id, username, email, avatar_url, status, created_at, updated_at FROM %s WHERE email = $1
+	`, table)
+
+	var user UserModel
+	err := Pool.QueryRow(ctx, sql, username).Scan(
+		&user.id,
+		&user.username,
+		&user.email,
+		&user.avatar_url,
+		&user.status,
+		&user.created_at,
+		&user.updated_at,
+	)
+
+	if err != nil {
+		return UserPayload{}, fmt.Errorf("failed to fetch user info: %w", err)
+	}
+
+	userInfo := UserPayload{
+		ID:        user.id,
+		Username:  user.username,
+		Email:     user.email,
+		Status:    user.status,
+		CreatedAt: user.created_at.Format(time.RFC3339),
+	}
+
+	if user.avatar_url.Valid {
+		urlStr := user.avatar_url.String
+		userInfo.AvatarURL = &urlStr
+	}
+
+	if user.updated_at.Valid {
+		timeStr := user.updated_at.Time.Format(time.RFC3339)
+		userInfo.UpdatedAt = &timeStr
+	}
+
+	return userInfo, nil
 }

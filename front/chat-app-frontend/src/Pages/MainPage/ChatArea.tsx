@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import { DroppableZone } from "../../Components/DroppableZone";
 import { MessagePayload, MessageResponse } from "../../bindings";
+import { useUser } from "../../Context/userContext";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -18,6 +19,7 @@ export function ChatArea({
   onSendMessage,
 }: ChatAreaProps) {
   const chatLogRef = useRef<HTMLDivElement>(null);
+  const { userData } = useUser();
 
   useEffect(() => {
     if (chatLogRef.current) {
@@ -29,7 +31,10 @@ export function ChatArea({
     <div className="chat-area">
       <div className="chat-log" ref={chatLogRef}>
         {messages.map((msg) => (
-          <div key={msg.id} className={`chat-message ${msg.owner_name}`}>
+          <div
+            key={msg.id}
+            className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}
+          >
             <div className="message-user">{msg.owner_name}</div>
             <div className="message-text">{msg.content}</div>
           </div>

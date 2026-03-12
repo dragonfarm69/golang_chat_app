@@ -23,6 +23,7 @@ import { DroppableZone, REGION } from "../../Components/DroppableZone";
 // import { ChatArea } from "../../Components/ChatArea";
 import { ChatArea } from "./ChatArea";
 import { useChatData } from "../../Context/DataContext";
+import { useUser } from "../../Context/userContext";
 import { Message } from "../../db";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -32,8 +33,10 @@ import {
   MessageResponse,
   RoomLitePayload,
 } from "../../bindings";
+import { Store } from "@tauri-apps/plugin-store";
 
 function HomePage() {
+  const { userData } = useUser();
   const isConnected = useRef(false);
   const BUTTON_FLASHING_ANIMATION_TIMER = 2000;
   const ROOMS_CAP = 6; // the amount of rooms can be opened at the same time
@@ -58,6 +61,11 @@ function HomePage() {
   const { saveChatData, deleteChatData, updateMessage } = useChatData();
 
   const handleSendMessage = (roomId: string) => (e: React.FormEvent) => {
+    if (!userData || !userData.id) {
+      console.error("Current user data is null");
+      return;
+    }
+
     e.preventDefault();
     const messageText = newMessage[roomId] || "";
 
@@ -72,8 +80,8 @@ function HomePage() {
 
     const messagePayload: MessagePayload = {
       id: tempId,
-      user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
-      room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
+      user_id: userData.id,
+      room_id: roomId,
       content: messageText,
       timeStamp: timestamp,
       action: "SEND",
@@ -81,8 +89,8 @@ function HomePage() {
 
     const messageResponse: MessageResponse = {
       id: tempId,
-      owner_name: "me",
-      room_id: "802d5c42-d21a-4872-b7a5-255c6385baf2",
+      owner_name: userData.username || "me",
+      room_id: roomId,
       content: messageText,
       timeStamp: timestamp,
     };
@@ -97,12 +105,13 @@ function HomePage() {
 
     //save to indexDB
     const dbMessage: Message = {
-      id: crypto.randomUUID(),
+      id: tempId,
       room_id: roomId.toString(),
-      user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+      user_id: userData.id,
       content: messageText,
       timeStamp: timestamp,
     };
+
     saveChatData(dbMessage);
   };
 
@@ -119,61 +128,67 @@ function HomePage() {
   };
 
   useEffect(() => {
+    if (!userData || !userData.id) {
+      return;
+    }
+
     if (!isConnected.current) {
       invoke("establish_ws", {
-        userId: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+        userId: userData?.id,
       })
         .then(() => {
           isConnected.current = true;
         })
         .catch(console.error);
-    }
 
-    //fetch room list
-    async function fetchRoomList() {
-      const roomList = await commands.fetchRoomsList(
-        "ff43172a-4a24-4b51-be63-73cc8aee62ba",
-      );
-      if (roomList.status === "ok") {
-        console.log("hello: ", roomList.data);
-        if (roomList.data != null) {
-          setRooms((prev) => [...prev, ...roomList.data]);
+      //fetch room list
+      async function fetchRoomList() {
+        if (userData && userData?.id !== null) {
+          const roomList = await commands.fetchRoomsList(userData.id);
+          if (roomList.status === "ok") {
+            if (roomList.data != null) {
+              setRooms((prev) => [...prev, ...roomList.data]);
+            }
+          } else {
+            console.error("Error fetching rooms: ", roomList.error);
+          }
+        } else {
+          console.error("Error fetching rooms user data is null");
         }
-      } else {
-        console.error("Error fetching rooms: ", roomList.error);
       }
-    }
 
-    fetchRoomList();
+      fetchRoomList();
 
-    // Object Prototype
-    // Listen to WS messages
-    const unlisten = listen("ws-message", (event) => {
-      const msg = JSON.parse(event.payload as string);
+      // Object Prototype
+      // Listen to WS messages
+      const unlisten = listen("ws-message", (event) => {
+        const msg = JSON.parse(event.payload as string);
+        const new_msg_data: Message = {
+          id: msg.id,
+          user_id: userData.id,
+          room_id: msg.room_id,
+          content: msg.content,
+          timeStamp: msg.timeStamp,
+        };
 
-      const new_msg_data: Message = {
-        id: msg.id,
-        user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
-        room_id: msg.room_id,
-        content: msg.content,
-        timeStamp: msg.timeStamp,
+        updateMessage(msg.original_id, new_msg_data);
+      });
+      return () => {
+        unlisten.then((stop) => stop());
       };
-      updateMessage(msg.original_id, new_msg_data);
-
-      // updateMessage(, msg as Message)
-      console.log("receiving: ", msg);
-    });
-
-    return () => {
-      unlisten.then((stop) => stop());
-    };
-  }, []);
+    }
+  }, [userData?.id]);
 
   const handleRoomSelect = async (
     room: (typeof rooms)[0],
     location?: string,
     droppedOnRoomWithId?: string,
   ) => {
+    if (!userData || !userData.id) {
+      console.error("Current user data is null");
+      return;
+    }
+
     //prevent user from opening more room
     if (selectedRooms.length === ROOMS_CAP) {
       return;
@@ -188,7 +203,7 @@ function HomePage() {
       const tempId = crypto.randomUUID();
       const messagePayload: MessagePayload = {
         id: tempId,
-        user_id: "ff43172a-4a24-4b51-be63-73cc8aee62ba",
+        user_id: userData.id,
         room_id: room.id,
         content: "",
         timeStamp: "",
@@ -198,25 +213,24 @@ function HomePage() {
 
       const result = await commands.fetchRoomMessages(room.id);
       if (result.status === "ok") {
-        console.log("hello: ", result.data);
         if (result.data != null) {
           setAllMessages((prev) => ({ ...prev, [room.id]: result.data }));
         }
       } else {
         console.error("Error fetching rooms: ", result.error);
       }
-      console.log("room_messages: ", result);
+      // console.log("room_messages: ", result);
 
       if (location) {
         //get the needed index to add the chat room to rooms
         const dropIndex = selectedRooms.findIndex(
           (r) => r.id.toString() === droppedOnRoomWithId,
         );
-        console.log(selectedRooms);
-        console.log(
-          "dropped on index: ",
-          rooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId),
-        );
+        // console.log(selectedRooms);
+        // console.log(
+        //   "dropped on index: ",
+        //   rooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId),
+        // );
 
         switch (location) {
           case "top":

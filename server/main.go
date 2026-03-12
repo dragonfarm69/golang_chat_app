@@ -185,6 +185,30 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(rooms)
 	})
+	mux.HandleFunc("/fetch_user_info", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		username := r.URL.Query().Get("username")
+
+		if username == "" {
+			http.Error(w, "Can't be empty", http.StatusNotFound)
+			return
+		}
+
+		ctx := r.Context()
+		user, err := fetchUserInfo(ctx, username)
+
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Failed to fetch user info", http.StatusInternalServerError)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(user)
+	})
 
 	//Configure CORS
 	c := cors.New(cors.Options{

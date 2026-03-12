@@ -3,56 +3,69 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Store } from "@tauri-apps/plugin-store";
+import { useAuth } from "../../Context/AuthContext";
+import { useUser } from "../../Context/userContext";
+import { commands } from "../../bindings";
+import { UserInfo } from "../../bindings";
 
 function CallBackPage() {
-    const navigate = useNavigate();
-    useEffect(() => {
-        const finalizeLogin = async () => {
-            try {
-                const verifier = sessionStorage.getItem("pkce_verifier")
-    
-                const current_url_params = new URLSearchParams(window.location.search)
-                const code = current_url_params.get("code");
-                const response = await invoke("fetch_token", {verifier, code})
-    
-                const tokenData = JSON.parse(response as string);
-    
-                sessionStorage.removeItem("pkce_verifier");
-                
-                //store tokens
-                const loginSuccess = await invoke("login", { verifier, code });
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const { initializeUserContext, userData } = useUser();
 
-                if (!loginSuccess) {
-                    throw new Error("Failed to store tokens securely.");
-                }
+  useEffect(() => {
+    const finalizeLogin = async () => {
+      try {
+        const verifier = sessionStorage.getItem("pkce_verifier");
 
+        const current_url_params = new URLSearchParams(window.location.search);
+        const code = current_url_params.get("code");
 
-                const userInfo = await invoke("fetch_account_info", { accessToken: tokenData.access_token })
-                const userData = JSON.parse(userInfo as string)
+        const response = await invoke("fetch_token", {
+          verifier: verifier,
+          code: code,
+        });
 
-                //store info in store 
-                const store = await Store.load("cache_data.json");
-                await store.set("email", userData.email);
-                await store.set("username", userData.name);
-                await store.save(); // persist the store to disk
+        const tokenData = JSON.parse(response as string);
 
-                //this should lead to home page
-                navigate("/");
-            }
-            catch (error) {
-                console.log(error)
-                alert(`Login failed ${error}`);
-            }
+        sessionStorage.removeItem("pkce_verifier");
+
+        //store tokens
+        await login(tokenData.access_token, tokenData.refresh_token);
+
+        const userInfo = await commands.fetchAccountInfo(
+          tokenData.access_token,
+        );
+
+        let extractedUserData;
+        if (userInfo.status === "ok") {
+          extractedUserData = userInfo.data;
         }
 
-        finalizeLogin();
-    }, [navigate])
+        // //store info in store
+        const store = await Store.load("cache_data.json");
+        await store.set("email", extractedUserData?.email);
+        await store.set("username", extractedUserData?.username);
+        await store.save(); // persist the store to disk
 
-    return (
-        <div className="app-container" style={{backgroundColor: "white"}}>
-            <h1>Finalize login...</h1>
-        </div>
-    )
+        await initializeUserContext(extractedUserData as UserInfo);
+
+        //this should lead to home page
+        navigate("/");
+      } catch (error) {
+        console.log(error);
+        alert(`Login failed ${error}`);
+      }
+    };
+
+    finalizeLogin();
+  }, [navigate]);
+
+  return (
+    <div className="app-container" style={{ backgroundColor: "white" }}>
+      <h1>Finalize login...</h1>
+    </div>
+  );
 }
 
-export default CallBackPage
+export default CallBackPage;
