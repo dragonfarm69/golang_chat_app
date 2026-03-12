@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     if (!store) {
-      console.log("store not initialized");
+      console.error("store not initialized");
     }
     try {
       await invoke("logout");
