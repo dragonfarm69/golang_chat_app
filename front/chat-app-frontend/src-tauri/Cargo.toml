@@ -26,10 +26,14 @@ serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
 dotenvy = "0.15"
 tauri-plugin-store = "2.4.1"
-keyring = "3.6.3"
+keyring = { version = "3", features = [
+    "sync-secret-service", # Linux - synchronous, no runtime coupling issues
+    "crypto-rust",        # Encryption for secret-service, pure Rust (no OpenSSL dep)
+] }
 tokio-tungstenite = "0.28"
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3.32"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }

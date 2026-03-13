@@ -33,6 +33,13 @@ function CallBackPage() {
         //store tokens
         await login(tokenData.access_token, tokenData.refresh_token);
 
+        const is_valid_token = await commands.checkAuth();
+
+        if (!is_valid_token) {
+          navigate("/error");
+          return;
+        }
+
         const userInfo = await commands.fetchAccountInfo(
           tokenData.access_token,
         );

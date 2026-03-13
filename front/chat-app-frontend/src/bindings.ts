@@ -24,8 +24,8 @@ async fetchAccountInfo(accessToken: string) : Promise<Result<UserInfo, string>> 
     else return { status: "error", error: e  as any };
 }
 },
-async login(accessToken: string, refreshToken: string) : Promise<boolean> {
-    return await TAURI_INVOKE("login", { accessToken, refreshToken });
+async finalizeLogin(accessToken: string, refreshToken: string) : Promise<boolean> {
+    return await TAURI_INVOKE("finalize_login", { accessToken, refreshToken });
 },
 async logout() : Promise<boolean> {
     return await TAURI_INVOKE("logout");
@@ -38,8 +38,13 @@ async getDataFromKeyring(name: string) : Promise<Result<string, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async checkAuth() : Promise<boolean> {
-    return await TAURI_INVOKE("checkAuth");
+async checkAuth() : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("checkAuth") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
 async establishWs(userId: string) : Promise<Result<null, string>> {
     try {

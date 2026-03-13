@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { ReactNode } from "react";
 import { Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
+import { commands } from "../bindings";
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -14,7 +15,7 @@ const authContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [store, setStore] = useState<Store | null>(null);
 
   useEffect(() => {
@@ -52,14 +53,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = async (access_token: string, refresh_token: string) => {
-    if (!store) {
-      console.error("store not initialized");
-    }
+    // console.log("Login success: ", loginSuccess);
     try {
-      const loginSuccess = await invoke("login", {
-        accessToken: access_token,
-        refreshToken: refresh_token,
-      });
+      const loginSuccess = await commands.finalizeLogin(
+        access_token,
+        refresh_token,
+      );
+      console.log("Login success: ", loginSuccess);
 
       if (loginSuccess) {
         setIsAuthenticated(true);

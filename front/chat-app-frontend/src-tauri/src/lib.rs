@@ -1,18 +1,40 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use futures_util::{lock::Mutex, SinkExt, StreamExt};
+use jsonwebtoken::Validation;
+use jsonwebtoken::{decode, decode_header, TokenData};
+use jsonwebtoken::{Algorithm, DecodingKey};
 use keyring::Entry;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::json;
 use specta::Type;
 use specta_typescript::Typescript;
-use std::{env, fs::remove_file, string};
-use tauri::{Emitter, Manager, State};
-use tauri_plugin_store::StoreExt;
+use std::env;
+use std::sync::{Arc, RwLock};
+use tauri::{Emitter, State};
 use tauri_specta::{collect_commands, Builder};
 use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
-// use specta::
+
+#[derive(Debug, Serialize, Deserialize)]
+struct JwkClaims {
+    pub sub: String,
+    pub exp: usize,
+    pub iat: usize,
+    pub iss: String,
+    pub azp: String,
+}
+
+#[derive(Debug, Clone)]
+struct JwksKey {
+    kid: String,
+    alg: Algorithm,
+    decoding_key: DecodingKey, //this will be created from n and e
+}
+
+#[derive(Clone)]
+struct AppState {
+    jwks: Arc<RwLock<Vec<JwksKey>>>,
+}
 
 const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
 const REDIRECT_URL: &str = env!("REDIRECT_URL");
@@ -75,6 +97,72 @@ pub struct RoomLitePayload {
     pub description: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+//Fetch jwk code for validation
+async fn fetch_public_code() -> Result<Vec<JwksKey>, String> {
+    let url = "http://localhost:8081/realms/chat-app/protocol/openid-connect/certs";
+
+    let client = reqwest::Client::new();
+    let res = client.get(url).send().await.map_err(|e| e.to_string())?;
+
+    if res.status().is_success() {
+        //turn into json value
+        let result = res.text().await.map_err(|e| e.to_string())?;
+        let json_value: serde_json::Value =
+            serde_json::from_str(&result).map_err(|e| e.to_string())?;
+
+        let mut decoded_key = Vec::<JwksKey>::new();
+
+        if let Some(key_array) = json_value["keys"].as_array() {
+            for keys in key_array {
+                if keys["use"] == "sig" {
+                    let n = keys["n"].as_str().ok_or("Missing n")?;
+                    let e = keys["e"].as_str().ok_or("Missing e")?;
+                    let kid = keys["kid"].as_str().ok_or("Missing kid")?;
+
+                    let decoding_key =
+                        DecodingKey::from_rsa_components(n, e).map_err(|e| e.to_string())?;
+
+                    decoded_key.push(JwksKey {
+                        kid: kid.to_string(),
+                        alg: Algorithm::RS256,
+                        decoding_key,
+                    });
+                }
+            }
+        }
+        println!("Decoded Key: {:?}", decoded_key);
+        Ok(decoded_key)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        println!("{}", error_body);
+        Err(format!("Error when fetching jwk: {}", error_body))
+    }
+}
+
+async fn validate_token(
+    token: &String,
+    keys: Vec<JwksKey>,
+) -> Result<TokenData<JwkClaims>, String> {
+    let header = decode_header(token).map_err(|e| e.to_string())?;
+    let kid = header.kid.ok_or("Token header is missing kid")?;
+
+    let decoding_key = keys
+        .iter()
+        .find(|key| key.kid == kid)
+        .ok_or("No matching public key was found")?;
+
+    let mut validation = Validation::new(header.alg);
+    validation.leeway = 60;
+    validation.set_issuer(&["http://localhost:8081/realms/chat-app"]); // to make sure the token is from this specific endpoint
+    validation.set_audience(&["account"]); //Get the client id from access token
+
+    decode::<JwkClaims>(token, &decoding_key.decoding_key, &validation)
+        .map_err(|e| format!("JWT validation failed: {}", e))
 }
 
 #[tauri::command]
@@ -170,7 +258,7 @@ fn delete_data_in_keyring(name: String) -> Result<(), keyring::Error> {
 
 #[tauri::command]
 #[specta::specta]
-async fn login(access_token: String, refresh_token: String) -> bool {
+async fn finalize_login(access_token: String, refresh_token: String) -> bool {
     if save_data_to_keyring("access_token".to_string(), access_token.to_string()).is_ok()
         && save_data_to_keyring("refresh_token".to_string(), refresh_token.to_string()).is_ok()
     {
@@ -199,13 +287,26 @@ async fn logout() -> bool {
 
 #[tauri::command]
 #[specta::specta]
-async fn checkAuth() -> bool {
+async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     if let Ok(access_token) = get_data_from_keyring("access_token".to_string()) {
-        let is_ok = fetch_account_info(access_token).await.is_ok();
-        println!("test: {}", is_ok);
-        return is_ok;
+        let keys = state
+            .jwks
+            .read()
+            .map_err(|_| "Something is wrong when fetching keys")?
+            .clone();
+
+        match validate_token(&access_token, keys).await {
+            Ok(_) => {
+                println!("Token is valid");
+                Ok(true)
+            }
+            Err(e) => {
+                println!("Token is invalid: {}", e);
+                Ok(false)
+            }
+        }
     } else {
-        return false;
+        return Ok(false);
     }
 }
 
@@ -318,13 +419,23 @@ async fn fetch_room_messages(room_id: String) -> Result<Vec<MessageResponse>, St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let public_key = rt.block_on(fetch_public_code()).unwrap_or_else(|e| {
+        println!("Failed to fetch token: {}", e);
+        Vec::new()
+    });
+
+    let app_state = AppState {
+        jwks: Arc::new(RwLock::new(public_key)),
+    };
+
     dotenvy::dotenv().ok();
 
-    let mut specta_builder = Builder::<tauri::Wry>::new().commands(collect_commands![
+    let specta_builder = Builder::<tauri::Wry>::new().commands(collect_commands![
         greet,
         fetch_token,
         fetch_account_info,
-        login,
+        finalize_login,
         logout,
         get_data_from_keyring,
         checkAuth,
@@ -343,6 +454,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(WsSender(Mutex::new(None)))
+        .manage(app_state)
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);
