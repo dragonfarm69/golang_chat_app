@@ -45,15 +45,15 @@ A real-time chat application that allows users to participate in **multiple chat
 
 ## Tech Stack
 
-| Layer          | Technology                                                    |
-| -------------- | ------------------------------------------------------------- |
-| **Frontend**   | React 18, TypeScript, Vite, React Router, @dnd-kit            |
-| **Desktop**    | Tauri 2                                                       |
-| **Backend**    | Go (net/http), Gorilla WebSocket, rs/cors                     |
-| **Database**   | PostgreSQL 18, Prisma ORM (schema management), pgx (Go driver)|
-| **Auth**       | Keycloak 26 (OAuth2 PKCE), `jsonwebtoken` (RS256 / JWKS)      |
-| **Keyring**    | OS keyring via `keyring` crate (secure credential storage)    |
-| **Infra**      | Docker Compose                                                |
+| Layer        | Technology                                                     |
+| ------------ | -------------------------------------------------------------- |
+| **Frontend** | React 18, TypeScript, Vite, React Router, @dnd-kit             |
+| **Desktop**  | Tauri 2                                                        |
+| **Backend**  | Go (net/http), Gorilla WebSocket, rs/cors                      |
+| **Database** | PostgreSQL 18, Prisma ORM (schema management), pgx (Go driver) |
+| **Auth**     | Keycloak 26 (OAuth2 PKCE), `jsonwebtoken` (RS256 / JWKS)       |
+| **Keyring**  | OS keyring via `keyring` crate (secure credential storage)     |
+| **Infra**    | Docker Compose                                                 |
 
 ---
 
@@ -210,24 +210,28 @@ npm run tauri dev
 
 ## API Endpoints
 
-| Method | Endpoint              | Description                                        |
-| ------ | --------------------- | -------------------------------------------------- |
-| GET    | `/ws`                 | WebSocket connection (`?user_id=`)                 |
-| GET    | `/newhub`             | Create a new chat room                             |
-| GET    | `/hublist`            | List all available room IDs                        |
-| GET    | `/join`               | Join a room (`?hub=&client=`)                      |
-| GET    | `/disconnect/`        | Disconnect from a room (`?hub=&client=`)           |
-| POST   | `/register`           | Register a new user via Keycloak                   |
-| GET    | `/fetch_rooms`        | Fetch rooms for a user (`?user_id=`)               |
-| GET    | `/fetch_room_message` | Fetch messages for a room (`?room_id=`)            |
-| GET    | `/fetch_user_info`    | Fetch user profile by username (`?username=`)      |
+| Method | Endpoint              | Description                                   |
+| ------ | --------------------- | --------------------------------------------- |
+| GET    | `/ws`                 | WebSocket connection (`?user_id=`)            |
+| GET    | `/newhub`             | Create a new chat room                        |
+| GET    | `/hublist`            | List all available room IDs                   |
+| GET    | `/join`               | Join a room (`?hub=&client=`)                 |
+| GET    | `/disconnect/`        | Disconnect from a room (`?hub=&client=`)      |
+| POST   | `/register`           | Register a new user via Keycloak              |
+| GET    | `/fetch_rooms`        | Fetch rooms for a user (`?user_id=`)          |
+| GET    | `/fetch_room_message` | Fetch messages for a room (`?room_id=`)       |
+| GET    | `/fetch_user_info`    | Fetch user profile by username (`?username=`) |
 
 ### WebSocket Message Format
 
 ```json
 {
-  "hubId": "<room-uuid>",
-  "content": "Hello, world!"
+  "id": "<message-uuid>",
+  "user_id": "<user-uuid>",
+  "room_id": "<room-uuid>",
+  "content": "<message-content>",
+  "timeStamp": "<message-timestamp>", --> created_at
+  "action": "<message-action>" --> could be SEND or JOIN
 }
 ```
 
