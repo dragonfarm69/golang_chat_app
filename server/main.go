@@ -210,6 +210,33 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(user)
 	})
+	mux.HandleFunc("/refreshToken", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var payload struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
+		if payload.RefreshToken == "" {
+			http.Error(w, "refresh_token is required", http.StatusBadRequest)
+			return
+		}
+
+		ctx := r.Context()
+		refreshUserToken(ctx, payload.RefreshToken)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// json.NewEncoder(w).Encode()
+	})
 
 	//Configure CORS
 	c := cors.New(cors.Options{

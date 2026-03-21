@@ -20,6 +20,12 @@ fn main() {
     if let Ok(val) = std::env::var("BACKEND_URL") {
         println!("cargo:rustc-env=BACKEND_URL={}", val);
     }
+    if let Ok(val) = std::env::var("CLIENT_SECRET") {
+        println!("cargo:rustc-env=CLIENT_SECRET={}", val);
+    }
+    if let Ok(val) = std::env::var("BACKEND_REFRESH_TOKEN") {
+        println!("cargo:rustc-env=BACKEND_REFRESH_TOKEN={}", val);
+    }
     
     // Rerun if these change
     // println!("cargo:rerun-if-env-changed=BACKEND_REGISTER_URL");

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use futures_util::{lock::Mutex, SinkExt, StreamExt};
 use jsonwebtoken::Validation;
@@ -8,12 +9,24 @@ use serde::Deserialize;
 use serde::Serialize;
 use specta::Type;
 use specta_typescript::Typescript;
-use std::env;
 use std::sync::{Arc, RwLock};
+use std::{env, result, string};
 use tauri::{Emitter, State};
 use tauri_specta::{collect_commands, Builder};
 use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TokenResponse {
+    refresh_token: String,
+    access_token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TokenClaims {
+    pub exp: usize,
+    pub iss: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct JwkClaims {
@@ -40,7 +53,9 @@ const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
 const REDIRECT_URL: &str = env!("REDIRECT_URL");
 const TOKEN_URL: &str = env!("TOKEN_URL");
 const CLIENT_ID: &str = env!("CLIENT_ID");
+const CLIENT_SECRET: &str = env!("CLIENT_SECRET");
 const BACKEND_URL: &str = std::env!("BACKEND_URL");
+const BACKEND_REFRESH_TOKEN_URL: &str = std::env!("BACKEND_REFRESH_TOKEN");
 
 #[tauri::command]
 #[specta::specta]
@@ -167,12 +182,44 @@ async fn validate_token(
 
 #[tauri::command]
 #[specta::specta]
+async fn refresh_token() -> Result<TokenResponse, String> {
+    let client = reqwest::Client::new();
+
+    let refresh_token = get_data_from_keyring("refresh_token".to_string())?;
+
+    let res = client
+        .post(BACKEND_REFRESH_TOKEN_URL)
+        .json(&serde_json::json!({ "refresh_token": &refresh_token }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if res.status().is_success() {
+        let body = res.text().await.map_err(|e| e.to_string())?;
+        let data = serde_json::from_str::<TokenResponse>(&body).map_err(|e| e.to_string())?;
+        Ok(data)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        println!("{}", error_body);
+        Err(format!(
+            "Error when trying to refresh token: {}",
+            error_body
+        ))
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
 async fn fetch_token(code: String, verifier: String) -> Result<String, String> {
     let client = reqwest::Client::new();
 
     let params = [
         ("grant_type", "authorization_code"),
         ("client_id", CLIENT_ID),
+        ("client_secret", CLIENT_SECRET),
         ("code", &code),
         ("redirect_uri", REDIRECT_URL),
         ("code_verifier", &verifier),
@@ -294,6 +341,32 @@ async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
             .read()
             .map_err(|_| "Something is wrong when fetching keys")?
             .clone();
+
+        let accesss_token_clone = access_token.clone();
+        // make sure that the token has not expired yet
+        let token_json: TokenClaims =
+            serde_json::from_str(&accesss_token_clone).map_err(|e| e.to_string())?;
+        let current_time: DateTime<Utc> = Utc::now();
+
+        let exp_i64: i64 = token_json
+            .exp
+            .try_into()
+            .map_err(|e: std::num::TryFromIntError| e.to_string())?;
+        let expire_time =
+            DateTime::from_timestamp(exp_i64, 0).ok_or_else(|| "invalid timeStamp".to_string())?;
+
+        let access_token = if expire_time < current_time {
+            match refresh_token().await {
+                Ok(result) => {
+                    let _ = save_data_to_keyring("access_token".to_string(), result.access_token.clone());
+                    let _ = save_data_to_keyring("refresh_token".to_string(), result.refresh_token);
+                    result.access_token
+                }
+                Err(e) => return Err(e),
+            }
+        } else {
+            access_token
+        };
 
         match validate_token(&access_token, keys).await {
             Ok(_) => {

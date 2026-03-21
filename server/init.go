@@ -27,6 +27,14 @@ func getAdminSecret() string {
 	return os.Getenv("ADMIN_SECRET")
 }
 
+func getClientID() string {
+	return os.Getenv("CLIENT_ID")
+}
+
+func getClientSecret() string {
+	return os.Getenv("CLIENT_SECRET")
+}
+
 func getKeyCloakTokenURL() string {
 	return os.Getenv("KEYCLOAK_TOKEN_URL")
 }
@@ -41,6 +49,10 @@ func getDBURL() string {
 
 func getSchemaName() string {
 	return os.Getenv("SCHEMA_NAME")
+}
+
+func getRefreshTokenEndpoint() string {
+	return os.Getenv("REFRESH_TOKEN_ENDPOINT")
 }
 
 func init() {

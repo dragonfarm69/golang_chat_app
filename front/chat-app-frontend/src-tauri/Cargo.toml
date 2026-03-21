@@ -37,3 +37,4 @@ tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+chrono = "0.4.44"
