@@ -9,11 +9,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use specta::Type;
 use specta_typescript::Typescript;
+use std::env;
+use std::os::linux::raw::stat;
 use std::sync::{Arc, RwLock};
-use std::{env, result, string};
 use tauri::{Emitter, State};
 use tauri_specta::{collect_commands, Builder};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::{interval, Duration};
 use tokio_tungstenite::connect_async;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,6 +49,7 @@ struct JwksKey {
 #[derive(Clone)]
 struct AppState {
     jwks: Arc<RwLock<Vec<JwksKey>>>,
+    pub stop_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
 const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
@@ -305,31 +308,66 @@ fn delete_data_in_keyring(name: String) -> Result<(), keyring::Error> {
 
 #[tauri::command]
 #[specta::specta]
-async fn finalize_login(access_token: String, refresh_token: String) -> bool {
-    if save_data_to_keyring("access_token".to_string(), access_token.to_string()).is_ok()
-        && save_data_to_keyring("refresh_token".to_string(), refresh_token.to_string()).is_ok()
-    {
-        return true;
+async fn finalize_login(
+    state: tauri::State<'_, AppState>,
+    access_token_string: String,
+    refresh_token_string: String,
+) -> Result<bool, String> {
+    let stop_tx = state.stop_tx.clone();
+    drop(state);
+
+    if let Some(tx) = stop_tx.lock().await.take() {
+        let _ = tx.send(());
     }
 
-    if let Ok(access_token) = get_data_from_keyring("access_token".to_string()) {
-        println!("Access Token from keyring: {}", access_token);
+    if save_data_to_keyring("access_token".to_string(), access_token_string.to_string()).is_ok()
+        && save_data_to_keyring(
+            "refresh_token".to_string(),
+            refresh_token_string.to_string(),
+        )
+        .is_ok()
+    {
+        let (tx, mut rx) = oneshot::channel::<()>();
+        *stop_tx.lock().await = Some(tx);
+
+        // create a timer for refreshing token
+        tauri::async_runtime::spawn(async move {
+            let mut ticker = interval(Duration::from_secs(300));
+            ticker.tick().await; // skip the first timer
+
+            loop {
+                tokio::select! {
+                    _ = &mut rx => break,
+                    _ = ticker.tick() => {
+                        match refresh_token().await {
+                            Ok(new_token) => {
+                                let _ = save_data_to_keyring("access_token".to_string(), new_token.access_token);
+                                let _ = save_data_to_keyring("refresh_token".to_string(), new_token.refresh_token);
+                            }
+                            Err(e) => {
+                                println!("Error when trying to refresh token {}", e);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        return Ok(true);
     }
-    if let Ok(refresh_token) = get_data_from_keyring("refresh_token".to_string()) {
-        println!("Refresh Token from keyring: {}", refresh_token);
-    }
-    return false;
+
+    return Ok(false);
 }
 
 #[tauri::command]
 #[specta::specta]
-async fn logout() -> bool {
-    if (delete_data_in_keyring("access_token".to_string()).is_ok()
-        && delete_data_in_keyring("refresh_token".to_string()).is_ok())
+async fn logout() -> Result<bool, String> {
+    if delete_data_in_keyring("access_token".to_string()).is_ok()
+        && delete_data_in_keyring("refresh_token".to_string()).is_ok()
     {
-        return true;
+        return Ok(true);
     }
-    return false;
+    Ok(false)
 }
 
 #[tauri::command]
@@ -358,7 +396,10 @@ async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
         let access_token = if expire_time < current_time {
             match refresh_token().await {
                 Ok(result) => {
-                    let _ = save_data_to_keyring("access_token".to_string(), result.access_token.clone());
+                    let _ = save_data_to_keyring(
+                        "access_token".to_string(),
+                        result.access_token.clone(),
+                    );
                     let _ = save_data_to_keyring("refresh_token".to_string(), result.refresh_token);
                     result.access_token
                 }
@@ -500,6 +541,7 @@ pub fn run() {
 
     let app_state = AppState {
         jwks: Arc::new(RwLock::new(public_key)),
+        stop_tx: Arc::new(Mutex::new(None)),
     };
 
     dotenvy::dotenv().ok();

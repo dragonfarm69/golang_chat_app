@@ -24,11 +24,21 @@ async fetchAccountInfo(accessToken: string) : Promise<Result<UserInfo, string>> 
     else return { status: "error", error: e  as any };
 }
 },
-async finalizeLogin(accessToken: string, refreshToken: string) : Promise<boolean> {
-    return await TAURI_INVOKE("finalize_login", { accessToken, refreshToken });
+async finalizeLogin(accessTokenString: string, refreshTokenString: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("finalize_login", { accessTokenString, refreshTokenString }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
-async logout() : Promise<boolean> {
-    return await TAURI_INVOKE("logout");
+async logout() : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("logout") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
 async getDataFromKeyring(name: string) : Promise<Result<string, string>> {
     try {
