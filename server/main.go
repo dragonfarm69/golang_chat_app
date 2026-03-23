@@ -122,10 +122,10 @@ func main() {
 			return
 		}
 
-		payload.Enabled = true
-
 		ctx := r.Context()
 		adminClient := Config.Client(ctx)
+
+		log.Println("payload: ", payload)
 
 		if err := createNewUser(ctx, adminClient, payload); err != nil {
 			log.Printf("Error creating new user: %v", err)
@@ -191,6 +191,8 @@ func main() {
 			return
 		}
 		username := r.URL.Query().Get("username")
+
+		log.Println("Username: ", username)
 
 		if username == "" {
 			http.Error(w, "Can't be empty", http.StatusNotFound)

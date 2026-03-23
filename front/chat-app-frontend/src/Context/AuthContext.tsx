@@ -35,8 +35,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkAuth = async (storeInstance: Store) => {
     try {
-      const authStatus = await invoke<boolean>("checkAuth");
-      setIsAuthenticated(authStatus);
+      const authStatus = await commands.checkAuth();
+      if (authStatus.status === "ok") {
+        setIsAuthenticated(authStatus.data);
+      } else {
+        throw new Error("Authentication failed");
+      }
     } catch (e) {
       console.log("error when trying to check authentication: ", e);
       await clearToken(storeInstance);

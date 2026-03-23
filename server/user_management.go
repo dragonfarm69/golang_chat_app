@@ -33,10 +33,9 @@ type KeyCloakUserPayload struct {
 }
 
 type RegisterPayload struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
-	Enabled   bool   `json:"enabled"`
 	Password  string `json:"password"`
 }
 
@@ -69,13 +68,11 @@ func createUserOnDB(ctx context.Context, user RegisterPayload, userId string) er
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
 		schema = "public"
 	}
-	table := pgx.Identifier{schema, "userinfo"}.Sanitize()
+	table := pgx.Identifier{schema, "users"}.Sanitize()
 
-	// Corrected SQL statement to match the provided arguments.
-	// Assuming your table has a `created_date` column. If not, remove it.
 	sql := fmt.Sprintf(`
-        INSERT INTO %s (id, email, name, profile_url, created_date)
-        VALUES (@id, @email, @name, @profile_url, @created_date)
+        INSERT INTO %s (id, email, username, avatar_url, created_at, updated_at)
+        VALUES (@id, @email, @username, @avatar_url, @created_at, @updated_at)
         RETURNING id
     `, table)
 
@@ -83,11 +80,12 @@ func createUserOnDB(ctx context.Context, user RegisterPayload, userId string) er
 	fullName := fmt.Sprintf("%s %s", user.FirstName, user.LastName)
 
 	err := Pool.QueryRow(ctx, sql, pgx.NamedArgs{
-		"id":           userId,
-		"name":         fullName,
-		"email":        user.Email,
-		"created_date": time.Now(),
-		"profile_url":  "test",
+		"id":         userId,
+		"username":   fullName,
+		"email":      user.Email,
+		"avatar_url": nil,
+		"created_at": time.Now(),
+		"updated_at": nil,
 	}).Scan(&id)
 
 	if err != nil {
@@ -108,7 +106,7 @@ func createUserOnKeyCloak(ctx context.Context, adminClient *http.Client, user Re
 		FirstName: user.FirstName,
 		LastName:  user.LastName,
 		Email:     user.Email,
-		Enabled:   user.Enabled,
+		Enabled:   true,
 		Credentials: []CredentialPayload{
 			{
 				Type:      "password",
@@ -176,6 +174,8 @@ func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
 	}
 	table := pgx.Identifier{schema, "users"}.Sanitize()
 
+	log.Println("I was here")
+
 	sql := fmt.Sprintf(`
 		SELECT id, username, email, avatar_url, status, created_at, updated_at FROM %s WHERE email = $1
 	`, table)
@@ -212,6 +212,8 @@ func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
 		timeStr := user.updated_at.Time.Format(time.RFC3339)
 		userInfo.UpdatedAt = &timeStr
 	}
+
+	log.Println("I was here: ", userInfo)
 
 	return userInfo, nil
 }

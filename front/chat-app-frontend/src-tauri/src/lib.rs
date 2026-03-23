@@ -68,17 +68,15 @@ fn greet(name: &str) -> String {
 
 struct WsSender(Mutex<Option<mpsc::UnboundedSender<String>>>);
 
-// interface UserInfo {
-//   avatar_url?: string;
-//   name: string;
-//   id: string;
-//   email: string;
-//   status: string;
-// }
-
-// export default UserInfo;
-
 #[derive(Serialize, Deserialize, Type)]
+pub struct RegisterPayload {
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Type, Debug)]
 pub struct UserInfo {
     pub id: String,
     pub avatar_url: Option<String>,
@@ -86,7 +84,7 @@ pub struct UserInfo {
     pub username: String,
     pub status: String,
     pub created_at: String,
-    pub updated_at: String,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Type)]
@@ -166,8 +164,11 @@ async fn validate_token(
     token: &String,
     keys: Vec<JwksKey>,
 ) -> Result<TokenData<JwkClaims>, String> {
+    println!("I was here 4");
     let header = decode_header(token).map_err(|e| e.to_string())?;
     let kid = header.kid.ok_or("Token header is missing kid")?;
+
+    println!("I was here 5 {}", token);
 
     let decoding_key = keys
         .iter()
@@ -178,6 +179,8 @@ async fn validate_token(
     validation.leeway = 60;
     validation.set_issuer(&["http://localhost:8081/realms/chat-app"]); // to make sure the token is from this specific endpoint
     validation.set_audience(&["account"]); //Get the client id from access token
+
+    println!("Token for validating: {}", token);
 
     decode::<JwkClaims>(token, &decoding_key.decoding_key, &validation)
         .map_err(|e| format!("JWT validation failed: {}", e))
@@ -236,6 +239,7 @@ async fn fetch_token(code: String, verifier: String) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
+        println!("Token fetched successfully");
         Ok(res.text().await.map_err(|e| e.to_string())?)
     } else {
         let error_body = res
@@ -361,6 +365,24 @@ async fn finalize_login(
 
 #[tauri::command]
 #[specta::specta]
+async fn register(data: RegisterPayload) -> Result<bool, String> {
+    let client = reqwest::Client::new();
+
+    let res = client
+        .post(BACKEND_REGISTER_URL)
+        .json(&serde_json::json!(data))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if (res.status().is_success()) {
+        return Ok(true);
+    }
+    return Ok(false);
+}
+
+#[tauri::command]
+#[specta::specta]
 async fn logout() -> Result<bool, String> {
     if delete_data_in_keyring("access_token".to_string()).is_ok()
         && delete_data_in_keyring("refresh_token".to_string()).is_ok()
@@ -381,6 +403,7 @@ async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
             .clone();
 
         let accesss_token_clone = access_token.clone();
+
         // make sure that the token has not expired yet
         let token_json: TokenClaims =
             serde_json::from_str(&accesss_token_clone).map_err(|e| e.to_string())?;
@@ -557,7 +580,8 @@ pub fn run() {
         establish_ws,
         send_message,
         fetch_rooms_list,
-        fetch_room_messages
+        fetch_room_messages,
+        register
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
