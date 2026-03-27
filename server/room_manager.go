@@ -185,3 +185,29 @@ func fetchRoomMessage(ctx context.Context, room_id string) ([]RoomMessage, error
 
 	return messages, nil
 }
+
+func addUserToRoom(ctx context.Context, userId string, roomId string) error {
+	schema := "chat"
+	if schema == "" {
+		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
+		schema = "public"
+	}
+	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
+
+	sql := fmt.Sprintf(`
+		INSERT INTO %s (user_id, room_id, joined_at)
+        VALUES (@user_id, @room_id, @joined_at)
+	`, room_member_table)
+
+	_, err := Pool.Exec(ctx, sql, pgx.NamedArgs{
+		"user_id":   userId,
+		"room_id":   roomId,
+		"joined_at": time.Now(),
+	})
+
+	if err != nil {
+		return fmt.Errorf("Failed to add user to room %v", err)
+	}
+
+	return nil
+}

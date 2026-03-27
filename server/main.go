@@ -81,33 +81,6 @@ func main() {
 
 		hub.disconnectClient(clientId)
 	})
-
-	mux.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
-		hubId := r.URL.Query().Get("hub")
-		clientId := r.URL.Query().Get("client")
-
-		if hubId == "" || clientId == "" {
-			http.Error(w, "Can't be empty", http.StatusNotFound)
-			return
-		}
-
-		hub := hubManager.getHub(hubId)
-		if hub == nil {
-			http.Error(w, "404 Not found", http.StatusNotFound)
-			return
-		}
-
-		is_client_exists := hub.isClientExists(clientId)
-		if is_client_exists {
-			w.WriteHeader(http.StatusExpectationFailed)
-			http.Error(w, "Client already exist !", http.StatusBadRequest)
-			return
-		}
-
-		// hub.disconnectClient(clientId)
-		// serveWs(hub, w, r)
-		w.WriteHeader(http.StatusOK)
-	})
 	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -238,6 +211,39 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		// json.NewEncoder(w).Encode()
+	})
+	mux.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var payload struct {
+			UserId string `json:"user_id"`
+			RoomId string `json:"room_id"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid json body", http.StatusBadRequest)
+			return
+		}
+
+		if payload.UserId == "" || payload.RoomId == "" {
+			http.Error(w, "user_id and room_id are required", http.StatusBadRequest)
+			return
+		}
+
+		ctx := r.Context()
+		err := addUserToRoom(ctx, payload.UserId, payload.RoomId)
+
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Failed to join room", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 	})
 
 	//Configure CORS

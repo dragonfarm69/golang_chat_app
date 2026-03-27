@@ -107,6 +107,9 @@ func (c *Client) handleIncomingMessages() {
 				//register client to that hub if not found
 				if _, ok := hub.Clients[c]; !ok {
 					hub.register <- c
+
+					//save to db
+
 				}
 			case "SEND":
 				//generate new Id

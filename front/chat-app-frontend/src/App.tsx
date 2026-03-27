@@ -11,9 +11,9 @@ import { UserProvider } from "./Context/userContext";
 
 function App() {
   return (
-    <AuthProvider>
-      <UserProvider>
-        <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <UserProvider>
           <Routes>
             <Route
               path="/"
@@ -32,9 +32,9 @@ function App() {
             <Route path="/callback" element={<CallBackPage />} />
             <Route path="*" element={<ErrorPage />} />
           </Routes>
-        </BrowserRouter>
-      </UserProvider>
-    </AuthProvider>
+        </UserProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

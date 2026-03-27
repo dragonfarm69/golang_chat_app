@@ -10,39 +10,39 @@ import { UserInfo } from "../../bindings";
 
 function CallBackPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { isAuthenticated, login } = useAuth();
   const { initializeUserContext, userData } = useUser();
 
   useEffect(() => {
     const finalizeLogin = async () => {
       try {
-        const verifier = sessionStorage.getItem("pkce_verifier");
-
-        const current_url_params = new URLSearchParams(window.location.search);
-        const code = current_url_params.get("code");
-
-        const response = await invoke("fetch_token", {
-          verifier: verifier,
-          code: code,
-        });
-
-        const tokenData = JSON.parse(response as string);
-
-        sessionStorage.removeItem("pkce_verifier");
-
-        //store tokens
-        await login(tokenData.access_token, tokenData.refresh_token);
-
-        const is_valid_token = await commands.checkAuth();
-
-        if (!is_valid_token) {
-          navigate("/error");
-          return;
+        if(!isAuthenticated) {
+          const verifier = sessionStorage.getItem("pkce_verifier");
+  
+          const current_url_params = new URLSearchParams(window.location.search);
+          const code = current_url_params.get("code");
+  
+          const response = await invoke("fetch_token", {
+            verifier: verifier,
+            code: code,
+          });
+  
+          const tokenData = JSON.parse(response as string);
+  
+          sessionStorage.removeItem("pkce_verifier");
+  
+          //store tokens
+          await login(tokenData.access_token, tokenData.refresh_token);
+  
+          const is_valid_token = await commands.checkAuth();
+  
+          if (!is_valid_token) {
+            navigate("/error");
+            return;
+          }
         }
 
-        const userInfo = await commands.fetchAccountInfo(
-          tokenData.access_token,
-        );
+        const userInfo = await commands.fetchAccountInfo();
 
         let extractedUserData;
         if (userInfo.status === "ok") {

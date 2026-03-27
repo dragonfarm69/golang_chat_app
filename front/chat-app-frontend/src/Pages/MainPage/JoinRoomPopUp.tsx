@@ -7,21 +7,16 @@ interface JoinRoomPopUpProps {
 
 function JoinRoomPopUp({ onClose }: JoinRoomPopUpProps) {
   const [formInputValue, setFormInputValue] = useState("");
-  const [selectedMode, setSelectedMode] = useState("IDMode");
 
   const joinRoom = async (value: string) => {
     try {
-      // console.log(value)
+      console.log(value)
       // console.log(selectedMode)
       // // After successfully joining, you might want to close the popup
       onClose();
     } catch (error) {
       console.error("SOMETHING IS WRONG", error);
     }
-  };
-
-  const handleModeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedMode(event.target.value);
   };
 
   return (
@@ -32,10 +27,6 @@ function JoinRoomPopUp({ onClose }: JoinRoomPopUpProps) {
           style={{ backgroundColor: "white" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <select value={selectedMode} onChange={handleModeChange}>
-            <option value="IDMode">Join with ID</option>
-            <option value="URLMode">Join with URL</option>
-          </select>
           <form
             className="room-form"
             onSubmit={(e) => {
@@ -45,7 +36,7 @@ function JoinRoomPopUp({ onClose }: JoinRoomPopUpProps) {
           >
             <input
               placeholder={
-                selectedMode === "IDMode" ? "Input room ID" : "Input room URL"
+                "Input room name"
               }
               type="text"
               value={formInputValue}

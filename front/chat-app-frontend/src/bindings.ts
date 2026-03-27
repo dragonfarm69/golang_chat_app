@@ -16,9 +16,9 @@ async fetchToken(code: string, verifier: string) : Promise<Result<string, string
     else return { status: "error", error: e  as any };
 }
 },
-async fetchAccountInfo(accessToken: string) : Promise<Result<UserInfo, string>> {
+async fetchAccountInfo() : Promise<Result<UserInfo, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_account_info", { accessToken }) };
+    return { status: "ok", data: await TAURI_INVOKE("fetch_account_info") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -91,6 +91,14 @@ async fetchRoomMessages(roomId: string) : Promise<Result<MessageResponse[], stri
 async register(data: RegisterPayload) : Promise<Result<boolean, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("register", { data }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async checkLoginStatus() : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("checkLoginStatus") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

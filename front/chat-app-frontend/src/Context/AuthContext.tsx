@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 import { commands } from "../bindings";
+import { useNavigate } from "react-router-dom";
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -17,21 +18,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [store, setStore] = useState<Store | null>(null);
+  const navigate = useNavigate()
 
   useEffect(() => {
-    initStore();
-  }, []);
+    const checkTokenExpired = async () => {
+      try {
+        console.log("checking...");
+        const result = await commands.checkLoginStatus();
+        if (result.status === "ok") {
+          if(result.data === true) {
+            setIsAuthenticated(result.data)
+            navigate("/callback")
+          }
+        }
+      } catch (e) {
+        console.log("Error when trying to check token expired", e);
+      } finally {
+        setIsLoading(false)
+      }
+    };
 
-  const initStore = async () => {
-    try {
-      const storeInst = await Store.load("auth.json");
-      setStore(storeInst);
-      await checkAuth(storeInst);
-    } catch (e) {
-      console.log("error when trying to init store: ", e);
-      setIsLoading(false);
-    }
-  };
+    checkTokenExpired()
+  }, []);
 
   const checkAuth = async (storeInstance: Store) => {
     try {

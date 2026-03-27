@@ -10,13 +10,13 @@ use serde::Serialize;
 use specta::Type;
 use specta_typescript::Typescript;
 use std::env;
-use std::os::linux::raw::stat;
 use std::sync::{Arc, RwLock};
 use tauri::{Emitter, State};
 use tauri_specta::{collect_commands, Builder};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::connect_async;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TokenResponse {
@@ -164,11 +164,8 @@ async fn validate_token(
     token: &String,
     keys: Vec<JwksKey>,
 ) -> Result<TokenData<JwkClaims>, String> {
-    println!("I was here 4");
     let header = decode_header(token).map_err(|e| e.to_string())?;
     let kid = header.kid.ok_or("Token header is missing kid")?;
-
-    println!("I was here 5 {}", token);
 
     let decoding_key = keys
         .iter()
@@ -253,7 +250,8 @@ async fn fetch_token(code: String, verifier: String) -> Result<String, String> {
 
 #[tauri::command]
 #[specta::specta]
-async fn fetch_account_info(access_token: String) -> Result<UserInfo, String> {
+async fn fetch_account_info() -> Result<UserInfo, String> {
+    let access_token = get_data_from_keyring("access_token".to_string())?;
     let client = reqwest::Client::new();
 
     let res = client
@@ -394,6 +392,51 @@ async fn logout() -> Result<bool, String> {
 
 #[tauri::command]
 #[specta::specta]
+async fn checkLoginStatus(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    if let Ok(access_token) = get_data_from_keyring("access_token".to_string()) {
+        let keys = state
+            .jwks
+            .read()
+            .map_err(|_| "Something is wrong when fetching keys")?
+            .clone();
+
+        let accesss_token_clone = access_token.clone();
+
+        let payload_b64 = accesss_token_clone.split('.').nth(1).ok_or("invalid jwt")?;
+        
+        let payload = URL_SAFE_NO_PAD.decode(payload_b64).map_err(|e| e.to_string())?;
+
+        let claims: TokenClaims = serde_json::from_slice(&payload).map_err(|e| e.to_string())?;
+        let current_time: DateTime<Utc> = Utc::now();
+
+        let exp_i64: i64 = claims.exp.try_into().map_err(|e: std::num::TryFromIntError| e.to_string())?;
+
+        let expire_time =
+            DateTime::from_timestamp(exp_i64, 0).ok_or_else(|| "invalid timeStamp".to_string())?;
+
+        if expire_time < current_time {
+            return Ok(false);
+        }
+
+        match validate_token(&access_token, keys).await {
+            Ok(_) => {    
+                println!("True");
+                Ok(true)
+            }
+            Err(_) => {
+                println!("Failed");
+                Ok(false)
+            }
+        }
+
+    } else {
+        return Ok(false);
+    }
+}
+
+
+#[tauri::command]
+#[specta::specta]
 async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     if let Ok(access_token) = get_data_from_keyring("access_token".to_string()) {
         let keys = state
@@ -404,17 +447,15 @@ async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
 
         let accesss_token_clone = access_token.clone();
 
-        // make sure that the token has not expired yet
-        let token_json: TokenClaims =
-            serde_json::from_str(&accesss_token_clone).map_err(|e| e.to_string())?;
-        let current_time: DateTime<Utc> = Utc::now();
+        let payload_b64 = accesss_token_clone.split('.').nth(1).ok_or("invalid jwt")?;
+        let payload = URL_SAFE_NO_PAD.decode(payload_b64).map_err(|e| e.to_string())?;
+        let claims: TokenClaims = serde_json::from_slice(&payload).map_err(|e| e.to_string())?;
+        let exp_i64: i64 = claims.exp.try_into().map_err(|e: std::num::TryFromIntError| e.to_string())?;
 
-        let exp_i64: i64 = token_json
-            .exp
-            .try_into()
-            .map_err(|e: std::num::TryFromIntError| e.to_string())?;
         let expire_time =
             DateTime::from_timestamp(exp_i64, 0).ok_or_else(|| "invalid timeStamp".to_string())?;
+
+        let current_time: DateTime<Utc> = Utc::now();
 
         let access_token = if expire_time < current_time {
             match refresh_token().await {
@@ -426,7 +467,7 @@ async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
                     let _ = save_data_to_keyring("refresh_token".to_string(), result.refresh_token);
                     result.access_token
                 }
-                Err(e) => return Err(e),
+                Err(_) => return Ok(false),
             }
         } else {
             access_token
@@ -581,7 +622,8 @@ pub fn run() {
         send_message,
         fetch_rooms_list,
         fetch_room_messages,
-        register
+        register,
+        checkLoginStatus,
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
