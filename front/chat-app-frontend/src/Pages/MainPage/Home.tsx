@@ -119,7 +119,28 @@ function HomePage() {
     setNewMessage((prev) => ({ ...prev, [roomId]: value }));
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async (roomName: string) => {
+    if (!userData || !userData.id) {
+      console.error("Current user data is null");
+      return;
+    }
+
+    const stats = await commands.joinRoom(userData?.id, roomName)
+    if(stats.status === "ok") {
+      if (stats.data === true) {
+          const roomList = await commands.fetchRoomsList(userData.id);
+          if (roomList.status === "ok") {
+            if (roomList.data != null) {
+              setRooms((prev) => [...prev, ...roomList.data]);
+            }
+          } else {
+            console.error("Error fetching rooms: ", roomList.error);
+        }
+      }
+    }
+  }
+
+  const handleJoinRoomPopUpOpen = () => {
     setIsJoinRoomPopupOpen(true);
   };
 
@@ -422,7 +443,7 @@ function HomePage() {
 
   return (
     <>
-      {isJoinRoomPopupOpen && <JoinRoomPopUp onClose={handleClosePopup} />}
+      {isJoinRoomPopupOpen && <JoinRoomPopUp onClose={handleClosePopup} onSubmit={handleJoinRoom} />}
       <div className="app-container">
         <DndContext
           sensors={sensors}
@@ -435,7 +456,7 @@ function HomePage() {
           <div className="wrapper">
             <div className="side-bar">
               <DroppableZone id="side-bar" className="room-list">
-                <button onClick={handleJoinRoom} title="Join a new room">
+                <button onClick={handleJoinRoomPopUpOpen} title="Join a new room">
                   +
                 </button>
                 <SortableContext

@@ -3,9 +3,10 @@ import "../../App.css";
 
 interface JoinRoomPopUpProps {
   onClose: () => void;
+  onSubmit: (roomName: string) => void;
 }
 
-function JoinRoomPopUp({ onClose }: JoinRoomPopUpProps) {
+function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
   const [formInputValue, setFormInputValue] = useState("");
 
   const joinRoom = async (value: string) => {
@@ -13,6 +14,7 @@ function JoinRoomPopUp({ onClose }: JoinRoomPopUpProps) {
       console.log(value)
       // console.log(selectedMode)
       // // After successfully joining, you might want to close the popup
+      onSubmit(formInputValue)
       onClose();
     } catch (error) {
       console.error("SOMETHING IS WRONG", error);
