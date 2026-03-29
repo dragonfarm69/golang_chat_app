@@ -603,7 +603,7 @@ async fn fetch_room_messages(room_id: String) -> Result<Vec<MessageResponse>, St
 
 #[tauri::command]
 #[specta::specta] 
-async fn join_room(user_id: String, room_id: String) -> Result<bool, String> {
+async fn join_room(user_id: String, invite_code: String) -> Result<bool, String> {
     let client = reqwest::Client::new();
     let access_token = get_data_from_keyring("access_token".to_string())?;
 
@@ -612,7 +612,7 @@ async fn join_room(user_id: String, room_id: String) -> Result<bool, String> {
     let res = client
     .post(&url)
     .bearer_auth(&access_token)
-    .json(&serde_json::json!({"user_id": user_id, "room_id": room_id}))
+    .json(&serde_json::json!({"user_id": user_id, "invite_code": invite_code}))
     .send()
     .await
     .map_err(|e| e.to_string())?;

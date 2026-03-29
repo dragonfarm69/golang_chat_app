@@ -38,7 +38,7 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
           >
             <input
               placeholder={
-                "Input room name"
+                "Input invite code"
               }
               type="text"
               value={formInputValue}

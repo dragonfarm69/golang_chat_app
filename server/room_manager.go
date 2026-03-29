@@ -186,28 +186,62 @@ func fetchRoomMessage(ctx context.Context, room_id string) ([]RoomMessage, error
 	return messages, nil
 }
 
-func addUserToRoom(ctx context.Context, userId string, roomId string) error {
+func addUserToRoom(ctx context.Context, userId string, invite_code string) error {
 	schema := "chat"
 	if schema == "" {
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
 		schema = "public"
 	}
-	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
 
-	sql := fmt.Sprintf(`
-		INSERT INTO %s (user_id, room_id, joined_at)
-        VALUES (@user_id, @room_id, @joined_at)
-	`, room_member_table)
+	//extract the room id
+	room_invites_table := pgx.Identifier{schema, "room_invitations"}.Sanitize()
+	room_invite_sql := fmt.Sprintf(`
+		SELECT room_id FROM %s WHERE invite_code = $1
+	`, room_invites_table)
 
-	_, err := Pool.Exec(ctx, sql, pgx.NamedArgs{
-		"user_id":   userId,
-		"room_id":   roomId,
-		"joined_at": time.Now(),
-	})
+	var room_id string
+	err := Pool.QueryRow(ctx, room_invite_sql, invite_code).Scan(&room_id)
 
 	if err != nil {
-		return fmt.Errorf("Failed to add user to room %v", err)
+		return fmt.Errorf("Failed to query room invite %v", err)
 	}
+
+	if room_id == "" {
+		return fmt.Errorf("Invite code invalid or room not found")
+	}
+
+	//make sure that the room exists
+	var room_name string
+	rooms_table := pgx.Identifier{schema, "rooms"}.Sanitize()
+	rooms_table_sql := fmt.Sprintf(`
+		SELECT name FROM %s WHERE id = $1
+	`, rooms_table)
+
+	err = Pool.QueryRow(ctx, rooms_table_sql, room_id).Scan(&room_name)
+
+	if err != nil {
+		return fmt.Errorf("Failed to query room %v", err)
+	}
+
+	if room_id == "" {
+		return fmt.Errorf("Room not found")
+	}
+
+	log.Println(room_id)
+	log.Println(room_name)
+
+	//add user to room
+	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
+	sql := fmt.Sprintf(`
+		INSERT INTO %s (user_id, room_id, joined_at)
+		VALUES (@user_id, @room_id, @joined_at)
+	`, room_member_table)
+
+	_, err = Pool.Exec(ctx, sql, pgx.NamedArgs{
+		"user_id":   userId,
+		"room_id":   room_id,
+		"joined_at": time.Now(),
+	})
 
 	return nil
 }

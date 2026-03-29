@@ -220,7 +220,7 @@ func main() {
 
 		var payload struct {
 			UserId string `json:"user_id"`
-			RoomId string `json:"room_id"`
+			RoomId string `json:"invite_code"`
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -228,8 +228,23 @@ func main() {
 			return
 		}
 
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		token := authHeader[7:]
+		if token == "" {
+			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			return
+		}
+
+		// // token now contains the bearer token
+		log.Println("Bearer token:", token)
+
 		if payload.UserId == "" || payload.RoomId == "" {
-			http.Error(w, "user_id and room_id are required", http.StatusBadRequest)
+			http.Error(w, "user_id and invite_code are required", http.StatusBadRequest)
 			return
 		}
 
