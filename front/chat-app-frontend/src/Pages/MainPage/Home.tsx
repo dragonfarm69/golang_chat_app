@@ -119,22 +119,38 @@ function HomePage() {
     setNewMessage((prev) => ({ ...prev, [roomId]: value }));
   };
 
-  const handleJoinRoom = async (roomName: string) => {
+  const handlePopUpSubmit = async (data: string, isCreateRoom: boolean) => {
     if (!userData || !userData.id) {
       console.error("Current user data is null");
       return;
     }
-
-    const stats = await commands.joinRoom(userData?.id, roomName)
-    if(stats.status === "ok") {
-      if (stats.data === true) {
-          const roomList = await commands.fetchRoomsList(userData.id);
-          if (roomList.status === "ok") {
-            if (roomList.data != null) {
-              setRooms(roomList.data);
-            }
-          } else {
-            console.error("Error fetching rooms: ", roomList.error);
+    
+    if(isCreateRoom) {
+      const stats = await commands.createRoom(userData?.id, data)
+      if(stats.status === "ok") {
+        if (stats.data === true) {
+            const roomList = await commands.fetchRoomsList(userData.id);
+            if (roomList.status === "ok") {
+              if (roomList.data != null) {
+                setRooms(roomList.data);
+              }
+            } else {
+              console.error("Error fetching rooms: ", roomList.error);
+          }
+        }
+      }
+    } else {
+      const stats = await commands.joinRoom(userData?.id, data)
+      if(stats.status === "ok") {
+        if (stats.data === true) {
+            const roomList = await commands.fetchRoomsList(userData.id);
+            if (roomList.status === "ok") {
+              if (roomList.data != null) {
+                setRooms(roomList.data);
+              }
+            } else {
+              console.error("Error fetching rooms: ", roomList.error);
+          }
         }
       }
     }
@@ -443,7 +459,7 @@ function HomePage() {
 
   return (
     <>
-      {isJoinRoomPopupOpen && <JoinRoomPopUp onClose={handleClosePopup} onSubmit={handleJoinRoom} />}
+      {isJoinRoomPopupOpen && <JoinRoomPopUp onClose={handleClosePopup} onSubmit={handlePopUpSubmit} />}
       <div className="app-container">
         <DndContext
           sensors={sensors}

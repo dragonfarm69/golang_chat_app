@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -33,6 +35,24 @@ type RoomMessage struct {
 	Room_ID    string `json:"room_id"`
 	Content    string `json:"content"`
 	TimeStamp  string `json:"timeStamp"`
+}
+
+const charset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+func createInviteCode() (string, error) {
+	codeLength := 8
+	b := make([]byte, codeLength)
+
+	for i := range b {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+
+		b[i] = charset[num.Int64()]
+	}
+
+	return fmt.Sprintf("INV-%s", string(b)), nil
 }
 
 func fetchFullRoomDataBasedOnRoomId(ctx context.Context, room_id string) (Room, error) {
@@ -103,7 +123,7 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 	membersTable := pgx.Identifier{schema, "room_members"}.Sanitize()
 
 	sql := fmt.Sprintf(`
-		SELECT r.id, r.name, r.description, r.created_at, r.updated_at
+		SELECT r.id, r.name, r.created_at, r.updated_at
 		FROM %s r
 		JOIN %s m ON r.id = m.room_id
 		where m.user_id = $1
@@ -122,7 +142,6 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 		if err := rows.Scan(
 			&r.ID,
 			&r.Name,
-			&r.Description,
 			&r.CreatedAt,
 			&r.UpdatedAt,
 		); err != nil {
@@ -227,8 +246,8 @@ func addUserToRoom(ctx context.Context, userId string, invite_code string) error
 		return fmt.Errorf("Room not found")
 	}
 
-	log.Println(room_id)
-	log.Println(room_name)
+	// log.Println(room_id)
+	// log.Println(room_name)
 
 	//add user to room
 	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
@@ -242,6 +261,106 @@ func addUserToRoom(ctx context.Context, userId string, invite_code string) error
 		"room_id":   room_id,
 		"joined_at": time.Now(),
 	})
+
+	if err != nil {
+		return fmt.Errorf("Failed to add user to room %v", err)
+	}
+
+	return nil
+}
+
+func addUserToRoomByID(ctx context.Context, userId string, room_id string) error {
+	schema := "chat"
+	if schema == "" {
+		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
+		schema = "public"
+	}
+
+	//make sure that the room exists
+	var room_name string
+	rooms_table := pgx.Identifier{schema, "rooms"}.Sanitize()
+	rooms_table_sql := fmt.Sprintf(`
+		SELECT name FROM %s WHERE id = $1
+	`, rooms_table)
+
+	err := Pool.QueryRow(ctx, rooms_table_sql, room_id).Scan(&room_name)
+
+	if err != nil {
+		return fmt.Errorf("Failed to query room %v", err)
+	}
+
+	//add user to room
+	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
+	sql := fmt.Sprintf(`
+		INSERT INTO %s (user_id, room_id, joined_at)
+		VALUES (@user_id, @room_id, @joined_at)
+	`, room_member_table)
+
+	_, err = Pool.Exec(ctx, sql, pgx.NamedArgs{
+		"user_id":   userId,
+		"room_id":   room_id,
+		"joined_at": time.Now(),
+	})
+
+	if err != nil {
+		return fmt.Errorf("Failed to add user to room %v", err)
+	}
+
+	return nil
+}
+
+func createNewRoom(ctx context.Context, userId string, room_name string) error {
+	schema := "chat"
+	var room_id string
+
+	//create new room
+	room_table := pgx.Identifier{schema, "rooms"}.Sanitize()
+	sql := fmt.Sprintf(`
+		INSERT INTO %s (name, owner_id)
+		VALUES (@name, @owner_id)
+		RETURNING id
+	`, room_table)
+
+	err := Pool.QueryRow(ctx, sql, pgx.NamedArgs{
+		"name":     room_name,
+		"owner_id": userId,
+	}).Scan(&room_id)
+
+	if err != nil {
+		return fmt.Errorf("Failed to query room %v", err)
+	}
+
+	addUserToRoomByID(ctx, userId, room_id)
+
+	//If fail then generate code again when user need it
+	//create new invite code
+	MAX_TRIES := 10 // try 10 times
+
+	for i := 0; i < MAX_TRIES; i++ {
+		invite_code, err := createInviteCode()
+		if err != nil {
+			log.Printf("Failed to create invite code %v", err)
+		}
+
+		room_invites_table := pgx.Identifier{schema, "room_invitations"}.Sanitize()
+		sql = fmt.Sprintf(`
+		INSERT INTO %s (room_id, invited_by, invite_code)
+		VALUES (@room_id, @invited_by, @invite_code)
+		`, room_invites_table)
+
+		_, err = Pool.Exec(ctx, sql, pgx.NamedArgs{
+			"room_id":     room_id,
+			"invited_by":  userId,
+			"invite_code": invite_code,
+		})
+
+		//successfully saved
+		if err == nil {
+			return nil
+		}
+
+		log.Println("Duplicated key, trying again")
+	}
 
 	return nil
 }

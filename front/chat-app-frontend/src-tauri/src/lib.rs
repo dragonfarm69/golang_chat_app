@@ -630,6 +630,35 @@ async fn join_room(user_id: String, invite_code: String) -> Result<bool, String>
     }
 }
 
+#[tauri::command]
+#[specta::specta] 
+async fn create_room(user_id: String, room_name: String) -> Result<bool, String> {
+    let client = reqwest::Client::new();
+    let access_token = get_data_from_keyring("access_token".to_string())?;
+
+    let url = format!("{}/create", BACKEND_URL);
+
+    let res = client
+    .post(&url)
+    .bearer_auth(&access_token)
+    .json(&serde_json::json!({"user_id": user_id, "room_name": room_name}))
+    .send()
+    .await
+    .map_err(|e| e.to_string())?;
+
+
+    if res.status().is_success() {
+        Ok(true)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        println!("{}", error_body);
+        Ok(false)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -659,7 +688,8 @@ pub fn run() {
         fetch_room_messages,
         register,
         checkLoginStatus,
-        join_room
+        join_room,
+        create_room
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds

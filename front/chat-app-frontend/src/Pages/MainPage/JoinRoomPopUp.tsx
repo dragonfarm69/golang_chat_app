@@ -1,20 +1,24 @@
 import { useState } from "react";
 import "../../App.css";
+import { fa } from "@faker-js/faker";
 
 interface JoinRoomPopUpProps {
   onClose: () => void;
-  onSubmit: (roomName: string) => void;
+  onSubmit: (roomName: string, isCreateRoom: boolean) => void;
 }
 
 function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
   const [formInputValue, setFormInputValue] = useState("");
+  const [formCreateRoomState, setFormCreateRoomState] = useState(false);
 
-  const joinRoom = async (value: string) => {
+  const handleSubmit = (value: string) => {
     try {
-      console.log(value)
-      // console.log(selectedMode)
-      // // After successfully joining, you might want to close the popup
-      onSubmit(formInputValue)
+      if(formCreateRoomState) {
+        console.log(value)
+        onSubmit(formInputValue, true)
+      } else {
+        onSubmit(formInputValue, false)
+      }
       onClose();
     } catch (error) {
       console.error("SOMETHING IS WRONG", error);
@@ -33,11 +37,13 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
             className="room-form"
             onSubmit={(e) => {
               e.preventDefault();
-              joinRoom(formInputValue);
+              handleSubmit(formInputValue);
             }}
           >
             <input
               placeholder={
+                formCreateRoomState ?
+                "Input room name" :
                 "Input invite code"
               }
               type="text"
@@ -45,9 +51,14 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
               onChange={(e) => setFormInputValue(e.target.value)}
             ></input>
             <button className="join-room-button" type="submit">
-              Join
+              {formCreateRoomState ? "Create" : "Join"}
             </button>
           </form>
+          <button className="join-popup-button" onClick={() => {
+            setFormCreateRoomState(!formCreateRoomState)
+          }}>
+            {formCreateRoomState ? "Join A Room" : "Create New Room"}
+          </button>
           <button className="close-popup-button" onClick={onClose}>
             Close
           </button>

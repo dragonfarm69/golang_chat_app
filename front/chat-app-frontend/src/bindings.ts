@@ -111,6 +111,14 @@ async joinRoom(userId: string, inviteCode: string) : Promise<Result<boolean, str
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async createRoom(userId: string, roomName: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_room", { userId, roomName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

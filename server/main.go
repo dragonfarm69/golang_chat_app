@@ -260,6 +260,57 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("/create", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var payload struct {
+			UserId   string `json:"user_id"`
+			RoomName string `json:"room_name"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid json body", http.StatusBadRequest)
+			return
+		}
+
+		log.Println("User id: ", payload.UserId)
+		log.Println("Room nmae: ", payload.RoomName)
+
+		// authHeader := r.Header.Get("Authorization")
+		// if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		// 	http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
+		// 	return
+		// }
+
+		// token := authHeader[7:]
+		// if token == "" {
+		// 	http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		// 	return
+		// }
+
+		// // // token now contains the bearer token
+		// log.Println("Bearer token:", token)
+
+		if payload.UserId == "" || payload.RoomName == "" {
+			http.Error(w, "user_id and room name are required", http.StatusBadRequest)
+			return
+		}
+
+		ctx := r.Context()
+		err := createNewRoom(ctx, payload.UserId, payload.RoomName)
+
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Failed to create room", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+	})
 
 	//Configure CORS
 	c := cors.New(cors.Options{
