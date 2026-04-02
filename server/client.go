@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/oklog/ulid/v2"
 )
 
 const (
@@ -87,19 +87,6 @@ func (c *Client) handleIncomingMessages() {
 			continue
 		}
 
-		if msg.Action != "JOIN" {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			id, err := addNewMessageToDB(ctx, msg)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			log.Println("Saved message successfully with id: ", id)
-		}
-
 		hub := c.hubs.getHub(msg.Room_ID)
 		if hub != nil {
 			switch msg.Action {
@@ -113,7 +100,7 @@ func (c *Client) handleIncomingMessages() {
 				}
 			case "SEND":
 				//generate new Id
-				messageId := uuid.New().String()
+				messageId := ulid.Make().String()
 
 				responsePayload := &ResponseMessagePayload{
 					OriginalId: msg.Id,
@@ -124,6 +111,19 @@ func (c *Client) handleIncomingMessages() {
 					Action:     msg.Action,
 					TimeStamp:  msg.TimeStamp,
 				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				//change the id before saving to db
+				msg.Id = messageId
+				id, err := addNewMessageToDB(ctx, msg)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				log.Println("Saved message successfully with id: ", id)
 
 				jsonPayload, err := json.Marshal(responsePayload)
 				if err != nil {

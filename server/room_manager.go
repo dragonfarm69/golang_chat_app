@@ -171,7 +171,7 @@ func fetchRoomMessage(ctx context.Context, room_id string) ([]RoomMessage, error
 		FROM %s m
 		LEFT JOIN %s u ON m.user_id = u.id
 		WHERE m.room_id = $1
-		ORDER BY m.created_at DESC
+		ORDER BY m.id ASC
 	`, messagesTable, usersTable)
 
 	rows, err := Pool.Query(ctx, sql, room_id)
