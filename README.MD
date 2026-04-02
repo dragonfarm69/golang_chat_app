@@ -161,8 +161,12 @@ Run the initial SQL migration, then generate the Prisma client and seed:
 
 ```bash
 psql -U <your_db_user> -d app_main -f prisma/init_db.sql
-npx prisma generate
-npx prisma db seed
+```
+
+If you don't want to install psql
+```bash
+cd prisma
+docker exec -i <docker_name> psql -U <your_db_user> -d <your_schema_name> < init_db.sql
 ```
 
 ### 3. Start the Go Backend

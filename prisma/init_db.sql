@@ -48,13 +48,13 @@ CREATE TABLE IF NOT EXISTS room_members (
 -- Messages
 -- =====================
 CREATE TABLE IF NOT EXISTS messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(26) PRIMARY KEY,
     room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- removed NOT NULL
     content TEXT NOT NULL,
     message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'file', 'system')),
     is_edited BOOLEAN DEFAULT FALSE,
-    parent_id UUID REFERENCES messages(id) ON DELETE SET NULL, -- for thread/reply support
+    parent_id VARCHAR(26) REFERENCES messages(id) ON DELETE SET NULL, -- for thread/reply support
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -89,9 +89,8 @@ CREATE TABLE IF NOT EXISTS room_invitations (
 -- =====================
 -- Indexes for performance
 -- =====================
-CREATE INDEX idx_messages_room_id ON messages(room_id);
 CREATE INDEX idx_messages_user_id ON messages(user_id);
-CREATE INDEX idx_messages_created_at ON messages(room_id, created_at DESC);
+CREATE INDEX idx_messages_room_id ON messages(room_id, id DESC);
 CREATE INDEX idx_room_members_room_id ON room_members(room_id);
 CREATE INDEX idx_room_members_user_id ON room_members(user_id);
 CREATE INDEX idx_direct_messages_sender ON direct_messages(sender_id);
