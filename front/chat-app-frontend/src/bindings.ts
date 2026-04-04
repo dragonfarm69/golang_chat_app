@@ -80,9 +80,9 @@ async fetchRoomsList(userId: string) : Promise<Result<RoomLitePayload[], string>
     else return { status: "error", error: e  as any };
 }
 },
-async fetchRoomMessages(roomId: string) : Promise<Result<MessageResponse[], string>> {
+async fetchRoomMessages(roomId: string, offsetId: string) : Promise<Result<MessageResponse[], string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_room_messages", { roomId }) };
+    return { status: "ok", data: await TAURI_INVOKE("fetch_room_messages", { roomId, offsetId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

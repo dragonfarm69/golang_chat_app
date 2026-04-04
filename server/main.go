@@ -139,15 +139,24 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		room_id := r.URL.Query().Get("room_id")
 
-		if room_id == "" {
-			http.Error(w, "Can't be empty", http.StatusNotFound)
+		var payload struct {
+			Room_id   string `json:"room_id"`
+			Offset_id string `json:"offset_id"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "Failed to read body", http.StatusBadRequest)
+			return
+		}
+
+		if payload.Room_id == "" {
+			http.Error(w, "Room id is required", http.StatusBadRequest)
 			return
 		}
 
 		ctx := r.Context()
-		rooms, err := fetchRoomMessage(ctx, room_id)
+		rooms, err := fetchRoomMessage(ctx, payload.Room_id, payload.Offset_id)
 		log.Println(rooms)
 		if err != nil {
 			log.Println(err)

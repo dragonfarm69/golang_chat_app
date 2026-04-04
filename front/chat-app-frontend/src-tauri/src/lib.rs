@@ -581,10 +581,13 @@ async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, Strin
 
 #[tauri::command]
 #[specta::specta]
-async fn fetch_room_messages(room_id: String) -> Result<Vec<MessageResponse>, String> {
+async fn fetch_room_messages(room_id: String, offset_id: String) -> Result<Vec<MessageResponse>, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/fetch_room_message?room_id={}", BACKEND_URL, room_id);
-    let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let url = format!("{}/fetch_room_message", BACKEND_URL);
+    let res = client.get(&url).json(&serde_json::json!({
+        "room_id": room_id,
+        "offset_id": offset_id
+    })).send().await.map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         let text = res.text().await.map_err(|e| e.to_string())?;

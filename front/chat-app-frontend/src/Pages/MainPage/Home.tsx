@@ -34,6 +34,7 @@ import {
   RoomLitePayload,
 } from "../../bindings";
 import { Store } from "@tauri-apps/plugin-store";
+import { prepare, layout } from "@chenglou/pretext";
 
 function HomePage() {
   const { userData } = useUser();
@@ -248,7 +249,8 @@ function HomePage() {
       };
       commands.sendMessage(messagePayload);
 
-      const result = await commands.fetchRoomMessages(room.id);
+      console.log(room.id)
+      const result = await commands.fetchRoomMessages(room.id, "");
       if (result.status === "ok") {
         if (result.data != null) {
           setAllMessages((prev) => ({ ...prev, [room.id]: result.data }));

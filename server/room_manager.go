@@ -157,7 +157,7 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 	return rooms, nil
 }
 
-func fetchRoomMessage(ctx context.Context, room_id string) ([]RoomMessage, error) {
+func fetchRoomMessage(ctx context.Context, room_id string, offset_id string) ([]RoomMessage, error) {
 	schema := "chat"
 	if schema == "" {
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
@@ -165,16 +165,31 @@ func fetchRoomMessage(ctx context.Context, room_id string) ([]RoomMessage, error
 	}
 	messagesTable := pgx.Identifier{schema, "messages"}.Sanitize()
 	usersTable := pgx.Identifier{schema, "users"}.Sanitize()
+	var sql string
+	var args []interface{}
+	if offset_id == "" {
+		sql = fmt.Sprintf(`
+            SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at
+            FROM %s m
+            LEFT JOIN %s u ON m.user_id = u.id
+            WHERE m.room_id = $1
+            ORDER BY m.id DESC
+            LIMIT 50
+        `, messagesTable, usersTable)
+		args = []interface{}{room_id}
+	} else {
+		sql = fmt.Sprintf(`
+            SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at
+            FROM %s m
+            LEFT JOIN %s u ON m.user_id = u.id
+            WHERE m.room_id = $1 AND m.id < $2
+            ORDER BY m.id DESC
+            LIMIT 50
+        `, messagesTable, usersTable)
+		args = []interface{}{room_id, offset_id}
+	}
 
-	sql := fmt.Sprintf(`
-		SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at
-		FROM %s m
-		LEFT JOIN %s u ON m.user_id = u.id
-		WHERE m.room_id = $1
-		ORDER BY m.id ASC
-	`, messagesTable, usersTable)
-
-	rows, err := Pool.Query(ctx, sql, room_id)
+	rows, err := Pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Query failed: %w", err)
 	}
