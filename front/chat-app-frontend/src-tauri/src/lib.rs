@@ -561,7 +561,7 @@ async fn send_message(state: State<'_, WsSender>, message: MessagePayload) -> Re
 #[specta::specta]
 async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/fetch_rooms?user_id={}", BACKEND_URL, user_id);
+    let url = format!("{}/room?user_id={}", BACKEND_URL, user_id);
     let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
@@ -639,7 +639,7 @@ async fn create_room(user_id: String, room_name: String) -> Result<bool, String>
     let client = reqwest::Client::new();
     let access_token = get_data_from_keyring("access_token".to_string())?;
 
-    let url = format!("{}/create", BACKEND_URL);
+    let url = format!("{}/room", BACKEND_URL);
 
     let res = client
     .post(&url)

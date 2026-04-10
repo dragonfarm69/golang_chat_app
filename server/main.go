@@ -92,9 +92,90 @@ func main() {
 
 		serveWs(hubManager, w, r, user_id)
 	})
-	mux.HandleFunc("/newhub", func(w http.ResponseWriter, r *http.Request) {
-		hub_id := hubManager.createNewHub("temp")
-		w.Write([]byte(hub_id))
+	mux.HandleFunc("/room", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		//get room list
+		case http.MethodGet:
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			user_id := r.URL.Query().Get("user_id")
+
+			if user_id == "" {
+				http.Error(w, "Can't be empty", http.StatusNotFound)
+				return
+			}
+
+			ctx := r.Context()
+			rooms, err := fetchRoomsBasedOnUserId(ctx, user_id)
+			log.Println(rooms)
+			if err != nil {
+				log.Println(err)
+				http.Error(w, "Failed to fetch room list", http.StatusInternalServerError)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(rooms)
+		//create room
+		case http.MethodPost:
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			var payload struct {
+				UserId   string `json:"user_id"`
+				RoomName string `json:"room_name"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid json body", http.StatusBadRequest)
+				return
+			}
+
+			authHeader := r.Header.Get("Authorization")
+			if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+				http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
+				return
+			}
+
+			token := authHeader[7:]
+			if token == "" {
+				http.Error(w, "missing bearer token", http.StatusUnauthorized)
+				return
+			}
+
+			isValid := is_valid_token(token)
+
+			if !isValid {
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
+			}
+
+			if payload.UserId == "" || payload.RoomName == "" {
+				http.Error(w, "user_id and room name are required", http.StatusBadRequest)
+				return
+			}
+
+			ctx := r.Context()
+			err := createNewRoom(ctx, payload.UserId, payload.RoomName)
+
+			if err != nil {
+				log.Println(err)
+				http.Error(w, "Failed to create room", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+		//exit room
+		// case http.MethodDelete:
+
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 	mux.HandleFunc("/hublist", func(w http.ResponseWriter, r *http.Request) {
 		lists := hubManager.getHubListIds()
@@ -155,30 +236,6 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
-	})
-	mux.HandleFunc("/fetch_rooms", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		user_id := r.URL.Query().Get("user_id")
-
-		if user_id == "" {
-			http.Error(w, "Can't be empty", http.StatusNotFound)
-			return
-		}
-
-		ctx := r.Context()
-		rooms, err := fetchRoomsBasedOnUserId(ctx, user_id)
-		log.Println(rooms)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Failed to fetch room list", http.StatusInternalServerError)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(rooms)
 	})
 	mux.HandleFunc("/fetch_room_message", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -309,58 +366,6 @@ func main() {
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Failed to join room", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-	})
-	mux.HandleFunc("/create", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var payload struct {
-			UserId   string `json:"user_id"`
-			RoomName string `json:"room_name"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "invalid json body", http.StatusBadRequest)
-			return
-		}
-
-		authHeader := r.Header.Get("Authorization")
-		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
-			return
-		}
-
-		token := authHeader[7:]
-		if token == "" {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
-			return
-		}
-
-		isValid := is_valid_token(token)
-
-		if !isValid {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-
-		if payload.UserId == "" || payload.RoomName == "" {
-			http.Error(w, "user_id and room name are required", http.StatusBadRequest)
-			return
-		}
-
-		ctx := r.Context()
-		err := createNewRoom(ctx, payload.UserId, payload.RoomName)
-
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Failed to create room", http.StatusInternalServerError)
 			return
 		}
 
