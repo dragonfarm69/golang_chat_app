@@ -2,27 +2,73 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/MicahParks/keyfunc/v3"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/cors"
 )
 
+type JwksKey struct {
+	Kid string `json: "kid"`
+	Kty string `json: "kty"`
+	Alg string `json: "alg"`
+	Use string `json: "use"`
+	N   string `json: "n"`
+	E   string `json: "e"`
+}
+
+type JwkResponse struct {
+	Keys []JwksKey `json: "keys"`
+}
+
 var addr = flag.String("addr", ":8080", "chat server service")
+var public_keys keyfunc.Keyfunc
 
-func serveMainHtml(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL)
-	if r.URL.Path != "/" {
-		http.Error(w, "404 Not Found", http.StatusNotFound)
+func fetch_publick_keys() {
+	// {keycloak-server}/realms/{realm-name}/protocol/openid-connect/certs
+	var URL = getPublicKeyEndpoint()
+
+	var err error
+	public_keys, err = keyfunc.NewDefault([]string{URL})
+	if err != nil {
+		log.Fatalf("Failed to create a keyfunc.Keyfunc from the server's URL.\nError: %s", err)
+	}
+}
+
+func is_valid_token(token string) bool {
+	status, err := jwt.Parse(token, public_keys.Keyfunc)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, jwt.ErrTokenMalformed):
+			fmt.Println("Error: The string provided is not a valid JWT format.")
+		case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+			fmt.Println("Error: The signature is invalid (Possible tampering!).")
+		case errors.Is(err, jwt.ErrTokenExpired):
+			fmt.Println("Error: The token has naturally expired.")
+		case errors.Is(err, jwt.ErrTokenNotValidYet):
+			fmt.Println("Error: The token is not active yet.")
+		case errors.Is(err, jwt.ErrTokenInvalidClaims):
+			// This catches issues like wrong Issuer or wrong Audience
+			fmt.Println("Error: The token claims are invalid.")
+		default:
+			// This will catch jwks.Keyfunc errors (like "kid not found")
+			// or network errors if it tried to fetch new keys and failed.
+			fmt.Printf("Error: Token validation failed: %v\n", err)
+		}
+		return false
 	}
 
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+	if status.Valid {
+		return true
 	}
 
-	http.ServeFile(w, r, "index.html")
+	return false
 }
 
 func main() {
@@ -32,9 +78,9 @@ func main() {
 	// go hub.run()
 
 	mux := http.NewServeMux()
+	fetch_publick_keys()
 
 	hubManager.createNewHub("temp name")
-	mux.HandleFunc("/", serveMainHtml)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		// hubId := r.URL.Query().Get("hub")
 		user_id := r.URL.Query().Get("user_id")
@@ -285,23 +331,24 @@ func main() {
 			return
 		}
 
-		log.Println("User id: ", payload.UserId)
-		log.Println("Room nmae: ", payload.RoomName)
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
+			return
+		}
 
-		// authHeader := r.Header.Get("Authorization")
-		// if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		// 	http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
-		// 	return
-		// }
+		token := authHeader[7:]
+		if token == "" {
+			http.Error(w, "missing bearer token", http.StatusUnauthorized)
+			return
+		}
 
-		// token := authHeader[7:]
-		// if token == "" {
-		// 	http.Error(w, "missing bearer token", http.StatusUnauthorized)
-		// 	return
-		// }
+		isValid := is_valid_token(token)
 
-		// // // token now contains the bearer token
-		// log.Println("Bearer token:", token)
+		if !isValid {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
 
 		if payload.UserId == "" || payload.RoomName == "" {
 			http.Error(w, "user_id and room name are required", http.StatusBadRequest)

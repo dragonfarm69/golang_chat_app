@@ -10,7 +10,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@tauri-apps/api": "^2",
@@ -19,7 +18,8 @@
     "dexie": "^4.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.10.1"
+    "react-router-dom": "^7.10.1",
+    "react-virtuoso": "^4.18.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

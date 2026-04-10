@@ -55,6 +55,10 @@ func getRefreshTokenEndpoint() string {
 	return os.Getenv("REFRESH_TOKEN_ENDPOINT")
 }
 
+func getPublicKeyEndpoint() string {
+	return os.Getenv("KEYCLOAK_PUBLIC_KEY_ENDPOINT")
+}
+
 func init() {
 	flag.Parse()
 

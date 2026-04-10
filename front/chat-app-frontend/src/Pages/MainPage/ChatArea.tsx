@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
-import { DroppableZone } from "../../Components/DroppableZone";
-import { MessagePayload, MessageResponse } from "../../bindings";
+import { MessageResponse } from "../../bindings";
 import { useUser } from "../../Context/userContext";
+import { Virtuoso } from "react-virtuoso";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -27,19 +27,24 @@ export function ChatArea({
     }
   }, [messages, selectedRoom]);
 
+
   return (
     <div className="chat-area">
-      <div className="chat-log" ref={chatLogRef}>
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}
-          >
+      <Virtuoso
+        className={`chat-log`}
+        totalCount={messages.length}
+        data={messages}
+        followOutput="smooth"
+
+        //start from last index
+        initialTopMostItemIndex={messages.length - 1}
+        itemContent={(index, msg) => (
+          <div className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}>
             <div className="message-user">{msg.owner_name}</div>
             <div className="message-text">{msg.content}</div>
           </div>
-        ))}
-      </div>
+        )}
+      />
       <form className="message-form" onSubmit={onSendMessage}>
         <input
           type="text"

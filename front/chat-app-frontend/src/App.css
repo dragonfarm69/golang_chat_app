@@ -150,7 +150,9 @@ button {
 .chat-message {
   padding: 0.5rem 1rem;
   border-radius: 18px;
-  max-width: 60%;
+  max-width: 100%;
+  margin-bottom: 10px;
+  min-height: 60px;
 }
 
 .chat-message.me {
