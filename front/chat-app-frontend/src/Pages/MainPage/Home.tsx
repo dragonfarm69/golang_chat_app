@@ -33,8 +33,6 @@ import {
   MessageResponse,
   RoomLitePayload,
 } from "../../bindings";
-import { Store } from "@tauri-apps/plugin-store";
-import { prepare, layout } from "@chenglou/pretext";
 
 function HomePage() {
   const { userData } = useUser();

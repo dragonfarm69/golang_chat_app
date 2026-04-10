@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -71,6 +72,30 @@ func is_valid_token(token string) bool {
 	return false
 }
 
+func TokenValidation(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			http.Error(w, "Invalid header", http.StatusBadRequest)
+			return
+		}
+
+		parts := strings.Split(header, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
+		}
+		token := parts[1]
+
+		status := is_valid_token(token)
+		if status {
+			next.ServeHTTP(w, r)
+		} else {
+			http.Error(w, "Error when trying to serve http", http.StatusInternalServerError)
+			return
+		}
+	})
+}
+
 func main() {
 	flag.Parse()
 	hubManager := newHubManager()
@@ -92,7 +117,7 @@ func main() {
 
 		serveWs(hubManager, w, r, user_id)
 	})
-	mux.HandleFunc("/room", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		//get room list
 		case http.MethodGet:
@@ -101,6 +126,7 @@ func main() {
 				return
 			}
 			user_id := r.URL.Query().Get("user_id")
+			log.Println("HEADER: ", r.Header)
 
 			if user_id == "" {
 				http.Error(w, "Can't be empty", http.StatusNotFound)
@@ -135,25 +161,6 @@ func main() {
 				return
 			}
 
-			authHeader := r.Header.Get("Authorization")
-			if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-				http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
-				return
-			}
-
-			token := authHeader[7:]
-			if token == "" {
-				http.Error(w, "missing bearer token", http.StatusUnauthorized)
-				return
-			}
-
-			isValid := is_valid_token(token)
-
-			if !isValid {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
-				return
-			}
-
 			if payload.UserId == "" || payload.RoomName == "" {
 				http.Error(w, "user_id and room name are required", http.StatusBadRequest)
 				return
@@ -170,14 +177,14 @@ func main() {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-		//exit room
+		//delete room
 		// case http.MethodDelete:
 
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	mux.HandleFunc("/hublist", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/hublist", func(w http.ResponseWriter, r *http.Request) {
 		lists := hubManager.getHubListIds()
 		s := ""
 		for i, id := range lists {
@@ -237,7 +244,7 @@ func main() {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
 	})
-	mux.HandleFunc("/fetch_room_message", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/fetch_room_message", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -270,14 +277,12 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(rooms)
 	})
-	mux.HandleFunc("/fetch_user_info", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/fetch_user_info", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		username := r.URL.Query().Get("username")
-
-		log.Println("Username: ", username)
 
 		if username == "" {
 			http.Error(w, "Can't be empty", http.StatusNotFound)
@@ -324,7 +329,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		// json.NewEncoder(w).Encode()
 	})
-	mux.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/join", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -339,21 +344,6 @@ func main() {
 			http.Error(w, "invalid json body", http.StatusBadRequest)
 			return
 		}
-
-		authHeader := r.Header.Get("Authorization")
-		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
-			return
-		}
-
-		token := authHeader[7:]
-		if token == "" {
-			http.Error(w, "missing bearer token", http.StatusUnauthorized)
-			return
-		}
-
-		// // token now contains the bearer token
-		log.Println("Bearer token:", token)
 
 		if payload.UserId == "" || payload.RoomId == "" {
 			http.Error(w, "user_id and invite_code are required", http.StatusBadRequest)
@@ -372,6 +362,9 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	})
+
+	//middleware
+	mux.Handle("/api", http.StripPrefix("/api", TokenValidation(mux)))
 
 	//Configure CORS
 	c := cors.New(cors.Options{

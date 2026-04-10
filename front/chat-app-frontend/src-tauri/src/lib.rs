@@ -278,7 +278,7 @@ async fn fetch_account_info() -> Result<UserInfo, String> {
             .ok_or("Email not found in Keycloak response")?;
 
         //fetch the info from the db
-        let url = format!("http://localhost:8080/fetch_user_info?username={}", email);
+        let url = format!("http://localhost:8080/api/fetch_user_info?username={}", email);
         let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
         let user_info_db = res.text().await.map_err(|e| e.to_string())?;
@@ -561,8 +561,9 @@ async fn send_message(state: State<'_, WsSender>, message: MessagePayload) -> Re
 #[specta::specta]
 async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/room?user_id={}", BACKEND_URL, user_id);
-    let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let url = format!("{}/api/room?user_id={}", BACKEND_URL, user_id);
+    let access_token = get_data_from_keyring("access_token".to_string())?;
+    let res = client.get(&url).bearer_auth(&access_token).send().await.map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         let text = res.text().await.map_err(|e| e.to_string())?;
@@ -583,11 +584,13 @@ async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, Strin
 #[specta::specta]
 async fn fetch_room_messages(room_id: String, offset_id: String) -> Result<Vec<MessageResponse>, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/fetch_room_message", BACKEND_URL);
+    let url = format!("{}/api/fetch_room_message", BACKEND_URL);
+    let access_token = get_data_from_keyring("access_token".to_string())?;
+
     let res = client.get(&url).json(&serde_json::json!({
         "room_id": room_id,
         "offset_id": offset_id
-    })).send().await.map_err(|e| e.to_string())?;
+    })).bearer_auth(&access_token).send().await.map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         let text = res.text().await.map_err(|e| e.to_string())?;
@@ -610,7 +613,7 @@ async fn join_room(user_id: String, invite_code: String) -> Result<bool, String>
     let client = reqwest::Client::new();
     let access_token = get_data_from_keyring("access_token".to_string())?;
 
-    let url = format!("{}/join", BACKEND_URL);
+    let url = format!("{}/api/join", BACKEND_URL);
 
     let res = client
     .post(&url)
@@ -639,7 +642,7 @@ async fn create_room(user_id: String, room_name: String) -> Result<bool, String>
     let client = reqwest::Client::new();
     let access_token = get_data_from_keyring("access_token".to_string())?;
 
-    let url = format!("{}/room", BACKEND_URL);
+    let url = format!("{}/api/room", BACKEND_URL);
 
     let res = client
     .post(&url)
