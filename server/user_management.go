@@ -266,7 +266,7 @@ func refreshUserToken(ctx context.Context, refresh_token string) {
 
 func (app *App) blacklist_token(ctx context.Context, token string) {
 	//1 hour of black list
-	err := app.redis_db.Set(ctx, "blackist:"+token, "1", 1*time.Hour).Err()
+	err := app.redis_db.Set(ctx, "blacklist:"+token, "1", 1*time.Hour).Err()
 	if err != nil {
 		log.Println("Error when trying to blacklist token: ", err)
 		return
