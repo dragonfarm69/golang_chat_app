@@ -157,7 +157,7 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 	return rooms, nil
 }
 
-func fetchRoomMessage(ctx context.Context, room_id string, offset_id string) ([]RoomMessage, error) {
+func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id string) ([]RoomMessage, error) {
 	schema := "chat"
 	if schema == "" {
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")

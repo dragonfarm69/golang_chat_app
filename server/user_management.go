@@ -166,7 +166,7 @@ func createNewUser(ctx context.Context, adminClient *http.Client, user RegisterP
 	return nil
 }
 
-func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
+func (app *App) fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
 	schema := "chat"
 	if schema == "" {
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
@@ -265,7 +265,8 @@ func refreshUserToken(ctx context.Context, refresh_token string) {
 }
 
 func (app *App) blacklist_token(ctx context.Context, token string) {
-	err := app.redis_db.Set(ctx, "token", token, 0).Err()
+	//1 hour of black list
+	err := app.redis_db.Set(ctx, "blackist:"+token, "1", 1*time.Hour).Err()
 	if err != nil {
 		log.Println("Error when trying to blacklist token: ", err)
 		return
@@ -273,15 +274,16 @@ func (app *App) blacklist_token(ctx context.Context, token string) {
 }
 
 func (app *App) is_token_blacklisted(ctx context.Context, token string) (bool, error) {
-	val, err := app.redis_db.Get(ctx, token).Result()
+	val, err := app.redis_db.Exists(ctx, "blacklist:"+token).Result()
 	if err != nil {
 		log.Println("Error when trying to search for token: ", err)
 		return false, fmt.Errorf("Error when searching token: %w", err)
 	}
 
-	if val != "" {
+	// 1 if exists
+	if val == 1 {
 		return true, nil
+	} else {
+		return false, nil
 	}
-
-	return false, nil
 }

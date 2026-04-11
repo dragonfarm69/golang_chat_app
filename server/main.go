@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -52,20 +51,20 @@ func is_valid_token(token string) bool {
 	if err != nil {
 		switch {
 		case errors.Is(err, jwt.ErrTokenMalformed):
-			fmt.Println("Error: The string provided is not a valid JWT format.")
+			log.Println("Error: The string provided is not a valid JWT format.")
 		case errors.Is(err, jwt.ErrTokenSignatureInvalid):
-			fmt.Println("Error: The signature is invalid (Possible tampering!).")
+			log.Println("Error: The signature is invalid (Possible tampering!).")
 		case errors.Is(err, jwt.ErrTokenExpired):
-			fmt.Println("Error: The token has naturally expired.")
+			log.Println("Error: The token has naturally expired.")
 		case errors.Is(err, jwt.ErrTokenNotValidYet):
-			fmt.Println("Error: The token is not active yet.")
+			log.Println("Error: The token is not active yet.")
 		case errors.Is(err, jwt.ErrTokenInvalidClaims):
 			// This catches issues like wrong Issuer or wrong Audience
-			fmt.Println("Error: The token claims are invalid.")
+			log.Println("Error: The token claims are invalid.")
 		default:
 			// This will catch jwks.Keyfunc errors (like "kid not found")
 			// or network errors if it tried to fetch new keys and failed.
-			fmt.Printf("Error: Token validation failed: %v\n", err)
+			log.Printf("Error: Token validation failed: %v\n", err)
 		}
 		return false
 	}
@@ -124,6 +123,7 @@ func main() {
 	fetch_publick_keys()
 
 	//redis connection
+	//TODO: SET UP ENV
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password
@@ -317,7 +317,7 @@ func main() {
 		}
 
 		ctx := r.Context()
-		rooms, err := fetchRoomMessage(ctx, payload.Room_id, payload.Offset_id)
+		rooms, err := app.fetchRoomMessage(ctx, payload.Room_id, payload.Offset_id)
 		log.Println(rooms)
 		if err != nil {
 			log.Println(err)
@@ -341,7 +341,7 @@ func main() {
 		}
 
 		ctx := r.Context()
-		user, err := fetchUserInfo(ctx, username)
+		user, err := app.fetchUserInfo(ctx, username)
 
 		if err != nil {
 			log.Println(err)
