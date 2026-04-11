@@ -11,6 +11,7 @@ import (
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 )
 
@@ -25,6 +26,10 @@ type JwksKey struct {
 
 type JwkResponse struct {
 	Keys []JwksKey `json: "keys"`
+}
+
+type App struct {
+	redis_db *redis.Client
 }
 
 var addr = flag.String("addr", ":8080", "chat server service")
@@ -72,7 +77,7 @@ func is_valid_token(token string) bool {
 	return false
 }
 
-func TokenValidation(next http.Handler) http.Handler {
+func (app *App) TokenValidation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		if header == "" {
@@ -87,6 +92,19 @@ func TokenValidation(next http.Handler) http.Handler {
 		token := parts[1]
 
 		status := is_valid_token(token)
+
+		ctx := r.Context()
+		//check if token is blacklisted
+		isBlacklisted, err := app.is_token_blacklisted(ctx, token)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+
+		if isBlacklisted {
+			http.Error(w, "Unauthorized Token", http.StatusUnauthorized)
+			return
+		}
+
 		if status {
 			next.ServeHTTP(w, r)
 		} else {
@@ -104,6 +122,19 @@ func main() {
 
 	mux := http.NewServeMux()
 	fetch_publick_keys()
+
+	//redis connection
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password
+		DB:       0,  // use default DB
+		Protocol: 2,
+	})
+	defer rdb.Close()
+
+	app := &App{
+		redis_db: rdb,
+	}
 
 	hubManager.createNewHub("temp name")
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +225,26 @@ func main() {
 			s += id
 		}
 		w.Write([]byte(s))
+	})
+	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			http.Error(w, "Invalid header", http.StatusBadRequest)
+			return
+		}
+
+		parts := strings.Split(header, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
+		}
+		token := parts[1]
+
+		app.blacklist_token(ctx, token)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode("User logged out successfully")
 	})
 	mux.HandleFunc("/disconnect/", func(w http.ResponseWriter, r *http.Request) {
 		log.Print("diconnecting")
@@ -364,7 +415,7 @@ func main() {
 	})
 
 	//middleware
-	mux.Handle("/api", http.StripPrefix("/api", TokenValidation(mux)))
+	mux.Handle("/api", http.StripPrefix("/api", app.TokenValidation(mux)))
 
 	//Configure CORS
 	c := cors.New(cors.Options{

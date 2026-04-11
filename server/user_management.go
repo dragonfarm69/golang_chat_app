@@ -263,3 +263,25 @@ func refreshUserToken(ctx context.Context, refresh_token string) {
 
 	// return string(body)
 }
+
+func (app *App) blacklist_token(ctx context.Context, token string) {
+	err := app.redis_db.Set(ctx, "token", token, 0).Err()
+	if err != nil {
+		log.Println("Error when trying to blacklist token: ", err)
+		return
+	}
+}
+
+func (app *App) is_token_blacklisted(ctx context.Context, token string) (bool, error) {
+	val, err := app.redis_db.Get(ctx, token).Result()
+	if err != nil {
+		log.Println("Error when trying to search for token: ", err)
+		return false, fmt.Errorf("Error when searching token: %w", err)
+	}
+
+	if val != "" {
+		return true, nil
+	}
+
+	return false, nil
+}
