@@ -166,15 +166,13 @@ func createNewUser(ctx context.Context, adminClient *http.Client, user RegisterP
 	return nil
 }
 
-func (app *App) fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
+func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
 	schema := "chat"
 	if schema == "" {
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
 		schema = "public"
 	}
 	table := pgx.Identifier{schema, "users"}.Sanitize()
-
-	log.Println("I was here")
 
 	sql := fmt.Sprintf(`
 		SELECT id, username, email, avatar_url, status, created_at, updated_at FROM %s WHERE email = $1
@@ -212,8 +210,6 @@ func (app *App) fetchUserInfo(ctx context.Context, username string) (UserPayload
 		timeStr := user.updated_at.Time.Format(time.RFC3339)
 		userInfo.UpdatedAt = &timeStr
 	}
-
-	log.Println("I was here: ", userInfo)
 
 	return userInfo, nil
 }

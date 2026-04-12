@@ -157,7 +157,6 @@ func main() {
 				return
 			}
 			user_id := r.URL.Query().Get("user_id")
-			log.Println("HEADER: ", r.Header)
 
 			if user_id == "" {
 				http.Error(w, "Can't be empty", http.StatusNotFound)
@@ -318,7 +317,6 @@ func main() {
 
 		ctx := r.Context()
 		rooms, err := app.fetchRoomMessage(ctx, payload.Room_id, payload.Offset_id)
-		log.Println(rooms)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Failed to fetch room list", http.StatusInternalServerError)
@@ -341,7 +339,7 @@ func main() {
 		}
 
 		ctx := r.Context()
-		user, err := app.fetchUserInfo(ctx, username)
+		user, err := fetchUserInfo(ctx, username)
 
 		if err != nil {
 			log.Println(err)
