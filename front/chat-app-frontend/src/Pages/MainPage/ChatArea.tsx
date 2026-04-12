@@ -1,8 +1,8 @@
-import { useRef, useEffect } from "react";
-import { MessageResponse } from "../../bindings";
+import { useRef, useEffect, useCallback } from "react";
+import { commands, MessageResponse } from "../../bindings";
 import { useUser } from "../../Context/userContext";
 import { Virtuoso } from "react-virtuoso";
-
+import { load } from "@tauri-apps/plugin-store";
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
   messages: MessageResponse[];
@@ -27,6 +27,13 @@ export function ChatArea({
     }
   }, [messages, selectedRoom]);
 
+  const loadMore = useCallback(async () => {
+    //load more data
+    const data = await commands.fetchRoomMessages(
+      selectedRoom.id,
+      messages[messages.length - 1].id,
+    );
+  }, [messages]);
 
   return (
     <div className="chat-area">
@@ -35,11 +42,13 @@ export function ChatArea({
         totalCount={messages.length}
         data={messages}
         followOutput="smooth"
-
+        endReached={loadMore}
         //start from last index
         initialTopMostItemIndex={messages.length - 1}
         itemContent={(index, msg) => (
-          <div className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}>
+          <div
+            className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}
+          >
             <div className="message-user">{msg.owner_name}</div>
             <div className="message-text">{msg.content}</div>
           </div>

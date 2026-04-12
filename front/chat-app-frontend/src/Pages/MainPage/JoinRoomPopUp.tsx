@@ -13,11 +13,11 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
 
   const handleSubmit = (value: string) => {
     try {
-      if(formCreateRoomState) {
-        console.log(value)
-        onSubmit(formInputValue, true)
+      if (formCreateRoomState) {
+        console.log(value);
+        onSubmit(formInputValue, true);
       } else {
-        onSubmit(formInputValue, false)
+        onSubmit(formInputValue, false);
       }
       onClose();
     } catch (error) {
@@ -26,45 +26,44 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
   };
 
   return (
-    <>
-      <div className="popup-overlay" onClick={onClose}>
-        <div
-          className="join-room-popup"
-          style={{ backgroundColor: "white" }}
-          onClick={(e) => e.stopPropagation()}
+    <div className="popup-overlay" onClick={onClose}>
+      <div
+        className="join-room-popup"
+        style={{ backgroundColor: "white" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <form
+          className="room-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit(formInputValue);
+          }}
         >
-          <form
-            className="room-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSubmit(formInputValue);
-            }}
-          >
-            <input
-              placeholder={
-                formCreateRoomState ?
-                "Input room name" :
-                "Input invite code"
-              }
-              type="text"
-              value={formInputValue}
-              onChange={(e) => setFormInputValue(e.target.value)}
-            ></input>
-            <button className="join-room-button" type="submit">
-              {formCreateRoomState ? "Create" : "Join"}
-            </button>
-          </form>
-          <button className="join-popup-button" onClick={() => {
-            setFormCreateRoomState(!formCreateRoomState)
-          }}>
-            {formCreateRoomState ? "Join A Room" : "Create New Room"}
+          <input
+            placeholder={
+              formCreateRoomState ? "Input room name" : "Input invite code"
+            }
+            type="text"
+            value={formInputValue}
+            onChange={(e) => setFormInputValue(e.target.value)}
+          ></input>
+          <button className="join-room-button" type="submit">
+            {formCreateRoomState ? "Create" : "Join"}
           </button>
-          <button className="close-popup-button" onClick={onClose}>
-            Close
-          </button>
-        </div>
+        </form>
+        <button
+          className="join-popup-button"
+          onClick={() => {
+            setFormCreateRoomState(!formCreateRoomState);
+          }}
+        >
+          {formCreateRoomState ? "Join A Room" : "Create New Room"}
+        </button>
+        <button className="close-popup-button" onClick={onClose}>
+          Close
+        </button>
       </div>
-    </>
+    </div>
   );
 }
 

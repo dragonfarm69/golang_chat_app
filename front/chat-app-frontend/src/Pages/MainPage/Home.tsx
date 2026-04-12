@@ -3,36 +3,37 @@ import { useState, useEffect, useRef } from "react";
 import JoinRoomPopUp from "./JoinRoomPopUp";
 import {
   DndContext,
-  DragEndEvent,
-  DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
   closestCenter,
-  DragOverEvent,
-  DragMoveEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import { RoomButton } from "../../Components/RoomButton";
 import { DroppableZone, REGION } from "../../Components/DroppableZone";
-// import { ChatArea } from "../../Components/ChatArea";
 import { ChatArea } from "./ChatArea";
 import { useChatData } from "../../Context/DataContext";
 import { useUser } from "../../Context/userContext";
 import { Message } from "../../db";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { commands, MessageResponse, RoomLitePayload } from "../../bindings";
 import {
-  commands,
-  MessagePayload,
-  MessageResponse,
-  RoomLitePayload,
-} from "../../bindings";
+  handleDragEnd,
+  handleDragMove,
+  handleDragOver,
+  handleDragStart,
+} from "./Hooks/useDragDrop";
+import { handleMessageChange, useSendMessage } from "./Hooks/useRoomMessages";
+import {
+  handleCloseRoom,
+  handlePopUpSubmit,
+  handleRoomSelect,
+} from "./Hooks/useRooms";
 
 function HomePage() {
   const { userData } = useUser();
@@ -55,105 +56,9 @@ function HomePage() {
   const [activeRoomIndex, setActiveRoomIndex] = useState(0); // for knowing which room is in focus
 
   const [currentRegion, setCurrentRegion] = useState<REGION>(null);
-  const [currentRegionId, setCurrentRegionID] = useState<String | null>(null);
+  const [currentRegionId, setCurrentRegionID] = useState<string | null>(null);
 
-  const { saveChatData, deleteChatData, updateMessage } = useChatData();
-
-  const handleSendMessage = (roomId: string) => (e: React.FormEvent) => {
-    if (!userData || !userData.id) {
-      console.error("Current user data is null");
-      return;
-    }
-
-    e.preventDefault();
-    const messageText = newMessage[roomId] || "";
-
-    const timestamp = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const tempId = crypto.randomUUID();
-
-    if (messageText.trim() === "") return;
-
-    const messagePayload: MessagePayload = {
-      id: tempId,
-      user_id: userData.id,
-      room_id: roomId,
-      content: messageText,
-      timeStamp: timestamp,
-      action: "SEND",
-    };
-
-    const messageResponse: MessageResponse = {
-      id: tempId,
-      owner_name: userData.username || "me",
-      room_id: roomId,
-      content: messageText,
-      timeStamp: timestamp,
-    };
-
-    setAllMessages((prevMessages) => ({
-      ...prevMessages,
-      [roomId]: [...(prevMessages[roomId] || []), messageResponse],
-    }));
-    setNewMessage((prev) => ({ ...prev, [roomId]: "" }));
-
-    commands.sendMessage(messagePayload);
-
-    //save to indexDB
-    const dbMessage: Message = {
-      id: tempId,
-      room_id: roomId.toString(),
-      user_id: userData.id,
-      content: messageText,
-      timeStamp: timestamp,
-    };
-
-    saveChatData(dbMessage);
-  };
-
-  const handleMessageChange = (roomId: string) => (value: string) => {
-    setNewMessage((prev) => ({ ...prev, [roomId]: value }));
-  };
-
-  const handlePopUpSubmit = async (data: string, isCreateRoom: boolean) => {
-    if (!userData || !userData.id) {
-      console.error("Current user data is null");
-      return;
-    }
-    
-    if(isCreateRoom) {
-      const stats = await commands.createRoom(userData?.id, data)
-      if(stats.status === "ok") {
-        if (stats.data === true) {
-            const roomList = await commands.fetchRoomsList(userData.id);
-            if (roomList.status === "ok") {
-              if (roomList.data != null) {
-                setRooms(roomList.data);
-              }
-            } else {
-              console.error("Error fetching rooms: ", roomList.error);
-          }
-        }
-      }
-    } else {
-      const stats = await commands.joinRoom(userData?.id, data)
-      if(stats.status === "ok") {
-        if (stats.data === true) {
-            const roomList = await commands.fetchRoomsList(userData.id);
-            if (roomList.status === "ok") {
-              if (roomList.data != null) {
-                setRooms(roomList.data);
-              }
-            } else {
-              console.error("Error fetching rooms: ", roomList.error);
-          }
-        }
-      }
-    }
-  }
+  const { updateMessage } = useChatData();
 
   const handleJoinRoomPopUpOpen = () => {
     setIsJoinRoomPopupOpen(true);
@@ -215,238 +120,6 @@ function HomePage() {
     }
   }, [userData?.id]);
 
-  const handleRoomSelect = async (
-    room: (typeof rooms)[0],
-    location?: string,
-    droppedOnRoomWithId?: string,
-  ) => {
-    if (!userData || !userData.id) {
-      console.error("Current user data is null");
-      return;
-    }
-
-    //prevent user from opening more room
-    if (selectedRooms.length === ROOMS_CAP) {
-      return;
-    }
-
-    const roomIndex = selectedRooms.findIndex(
-      (r) => r.id.toString() === room.id,
-    );
-
-    //not found
-    if (roomIndex === -1) {
-      const tempId = crypto.randomUUID();
-      const messagePayload: MessagePayload = {
-        id: tempId,
-        user_id: userData.id,
-        room_id: room.id,
-        content: "",
-        timeStamp: "",
-        action: "JOIN",
-      };
-      commands.sendMessage(messagePayload);
-
-      console.log(room.id)
-      const result = await commands.fetchRoomMessages(room.id, "");
-      if (result.status === "ok") {
-        if (result.data != null) {
-          setAllMessages((prev) => ({ ...prev, [room.id]: result.data }));
-        }
-      } else {
-        console.error("Error fetching rooms: ", result.error);
-      }
-      // console.log("room_messages: ", result);
-
-      if (location) {
-        //get the needed index to add the chat room to rooms
-        const dropIndex = selectedRooms.findIndex(
-          (r) => r.id.toString() === droppedOnRoomWithId,
-        );
-        // console.log(selectedRooms);
-        // console.log(
-        //   "dropped on index: ",
-        //   rooms.findIndex((r) => r.id.toString() === droppedOnRoomWithId),
-        // );
-
-        switch (location) {
-          case "top":
-            break;
-          case "bottom":
-            break;
-          case "left":
-            setSelectedRooms((prev) => {
-              const newRooms = [...prev];
-              newRooms.splice(dropIndex, 0, room);
-              return newRooms;
-            });
-            break;
-          case "right":
-            if (dropIndex < selectedRooms.length) {
-              setSelectedRooms((prev) => {
-                const newRooms = [...prev];
-                newRooms.splice(dropIndex + 1, 0, room);
-                return newRooms;
-              });
-            } else {
-              setSelectedRooms((prev) => [...prev, room]);
-            }
-            break;
-          default:
-            setSelectedRooms((prev) => [...prev, room]);
-            break;
-        }
-      } else {
-        setSelectedRooms((prev) => [...prev, room]);
-      }
-      setActiveRoomIndex(selectedRooms.length);
-    } else {
-      setActiveRoomIndex(roomIndex);
-    }
-  };
-
-  const handleCloseRoom = (roomsId: string) => {
-    const roomIndex = selectedRooms.findIndex(
-      (r) => r.id.toString() === roomsId,
-    );
-
-    setSelectedRooms((prev) => prev.filter((r) => r.id.toString() !== roomsId));
-
-    if (activeRoomIndex >= selectedRooms.length - 1) {
-      setActiveRoomIndex(Math.max(0, selectedRooms.length - 2));
-    } else if (roomIndex <= activeRoomIndex) {
-      setActiveRoomIndex(Math.max(0, activeRoomIndex - 1));
-    }
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id.toString());
-  };
-
-  const getRoomById = (roomId: string) => {
-    return rooms.find((r) => r.id.toString() === roomId);
-  };
-
-  const detectRegion = (event: DragEndEvent | DragOverEvent): REGION => {
-    const { over, activatorEvent, delta } = event;
-    if (!over) {
-      return null;
-    }
-
-    const element = document.querySelector(`[id="${over.id}"]`);
-    if (!element) {
-      return null;
-    }
-
-    const rect = element.getBoundingClientRect();
-
-    const pointerEvent = activatorEvent as PointerEvent;
-    if (!pointerEvent) {
-      return null;
-    }
-
-    const currentX = pointerEvent.clientX + delta.x;
-    const currentY = pointerEvent.clientY + delta.y;
-
-    const x = currentX - rect.left;
-    const y = currentY - rect.top;
-
-    const width = rect.width;
-    const height = rect.height;
-
-    const threshold = 0.3;
-
-    if (y < height * threshold) {
-      return "top";
-    }
-
-    if (y > height * (1 - threshold)) {
-      return "bottom";
-    }
-
-    if (x < width * threshold) {
-      return "left";
-    }
-
-    if (x > width * (1 - threshold)) {
-      return "right";
-    }
-
-    return null;
-  };
-
-  const handleDragMove = (event: DragMoveEvent) => {
-    const { over } = event;
-
-    if (!over) {
-      setCurrentRegion(null);
-      setCurrentRegionID(null);
-      return;
-    }
-
-    if (over.id.toString().startsWith("chat-")) {
-      setCurrentRegionID(over.id.toString());
-      const region = detectRegion(event);
-      setCurrentRegion(region);
-    } else {
-      setCurrentRegion(null);
-      setCurrentRegionID(null);
-    }
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { over } = event;
-
-    if (!over) {
-      setCurrentRegion(null);
-      setCurrentRegionID(null);
-      return;
-    }
-
-    if (over.id.toString().startsWith("chat-")) {
-      setCurrentRegionID(over.id.toString());
-    }
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (!over) {
-      setActiveId(null);
-      setCurrentRegion(null);
-      return;
-    }
-
-    // Check if dropping on a chat window
-    if (over.id.toString().startsWith("chat-")) {
-      const targetRoomId = over.id.toString().replace("chat-", "");
-      const room = getRoomById(active.id.toString());
-
-      if (room && currentRegion) {
-        //get current region
-        const region = detectRegion(event);
-        // console.log("current region: ", region)
-        // console.log("dropped on: ", targetRoomId)
-        handleRoomSelect(room, region as string, targetRoomId as string);
-      }
-      setActiveId(null);
-      setCurrentRegion(null);
-      return;
-    }
-
-    // Handle reordering in sidebar
-    if (active.id !== over.id && over.id === "side-bar") {
-      setRooms((rooms) => {
-        const oldIndex = rooms.findIndex((r) => r.id.toString() === active.id);
-        const newIndex = rooms.findIndex((r) => r.id.toString() === over.id);
-        return arrayMove(rooms, oldIndex, newIndex);
-      });
-    }
-
-    setActiveId(null);
-    setCurrentRegion(null);
-  };
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -459,20 +132,52 @@ function HomePage() {
 
   return (
     <>
-      {isJoinRoomPopupOpen && <JoinRoomPopUp onClose={handleClosePopup} onSubmit={handlePopUpSubmit} />}
+      {isJoinRoomPopupOpen && (
+        <JoinRoomPopUp
+          onClose={handleClosePopup}
+          onSubmit={(roomName, isCreateroom) =>
+            handlePopUpSubmit(roomName, isCreateroom, userData!, setRooms)
+          }
+        />
+      )}
       <div className="app-container">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragOver={handleDragOver}
-          onDragMove={handleDragMove}
+          onDragStart={(e) => handleDragStart(e, setActiveId)}
+          onDragEnd={(e) =>
+            handleDragEnd(
+              e,
+              {
+                userData: userData!,
+                allRooms: rooms,
+                selectedRooms,
+                currentRegion,
+              },
+              {
+                setAllMessages,
+                setCurrentRegion,
+                setSelectedRooms,
+                setActiveRoomIndex,
+                setActiveId,
+                setRooms,
+              },
+            )
+          }
+          onDragOver={(e) =>
+            handleDragOver(e, setCurrentRegion, setCurrentRegionID)
+          }
+          onDragMove={(e) =>
+            handleDragMove(e, setCurrentRegion, setCurrentRegionID)
+          }
         >
           <div className="wrapper">
             <div className="side-bar">
               <DroppableZone id="side-bar" className="room-list">
-                <button onClick={handleJoinRoomPopUpOpen} title="Join a new room">
+                <button
+                  onClick={handleJoinRoomPopUpOpen}
+                  title="Join a new room"
+                >
                   +
                 </button>
                 <SortableContext
@@ -504,7 +209,14 @@ function HomePage() {
                           });
                           return;
                         }
-                        handleRoomSelect(room);
+                        handleRoomSelect(
+                          userData!,
+                          room,
+                          selectedRooms,
+                          setAllMessages,
+                          setSelectedRooms,
+                          setActiveRoomIndex,
+                        );
                       }}
                       style={{
                         backgroundColor: selectedRooms.some(
@@ -538,18 +250,36 @@ function HomePage() {
                       {selectedRooms.length > 1 && (
                         <button
                           className="close-chat-btn"
-                          onClick={() => handleCloseRoom(room.id.toString())}
+                          onClick={() =>
+                            handleCloseRoom(
+                              room.id.toString(),
+                              selectedRooms,
+                              setSelectedRooms,
+                              setActiveRoomIndex,
+                              activeRoomIndex,
+                            )
+                          }
                         >
                           ×
                         </button>
                       )}
                     </div>
+                    ``
                     <ChatArea
                       selectedRoom={{ id: room.id, name: room.name }}
                       messages={allMessages[room.id] || []}
                       newMessage={newMessage[room.id] || ""}
-                      onMessageChange={handleMessageChange(room.id)}
-                      onSendMessage={handleSendMessage(room.id)}
+                      onMessageChange={handleMessageChange(
+                        room.id,
+                        setNewMessage,
+                      )}
+                      onSendMessage={useSendMessage(
+                        room.id,
+                        userData!,
+                        newMessage,
+                        setAllMessages,
+                        setNewMessage,
+                      )}
                     />
                   </DroppableZone>
                 ))}
@@ -573,7 +303,15 @@ function HomePage() {
                         {selectedRooms.length > 1 && (
                           <button
                             className="close-chat-btn"
-                            onClick={() => handleCloseRoom(room.id.toString())}
+                            onClick={() =>
+                              handleCloseRoom(
+                                room.id.toString(),
+                                selectedRooms,
+                                setSelectedRooms,
+                                setActiveRoomIndex,
+                                activeRoomIndex,
+                              )
+                            }
                           >
                             ×
                           </button>
@@ -583,8 +321,17 @@ function HomePage() {
                         selectedRoom={room}
                         messages={allMessages[room.id] || []}
                         newMessage={newMessage[room.id] || ""}
-                        onMessageChange={handleMessageChange(room.id)}
-                        onSendMessage={handleSendMessage(room.id)}
+                        onMessageChange={handleMessageChange(
+                          room.id,
+                          setNewMessage,
+                        )}
+                        onSendMessage={useSendMessage(
+                          room.id,
+                          userData!,
+                          newMessage,
+                          setAllMessages,
+                          setNewMessage,
+                        )}
                       />
                     </DroppableZone>
                   ))}
