@@ -1,7 +1,11 @@
 import { Dispatch, SetStateAction } from "react";
-import { commands, RoomLitePayload, UserInfo } from "../../../bindings";
-import { MessagePayload } from "../../../bindings";
-import { MessageResponse } from "../../../bindings";
+import {
+  commands,
+  RoomLitePayload,
+  UserInfo,
+  MessagePayload,
+  MessageResponse,
+} from "../../../bindings";
 
 export const ROOMS_CAP = 6; // the amount of rooms can be opened at the same tim
 export type MessageMap = { [key: string]: MessageResponse[] };

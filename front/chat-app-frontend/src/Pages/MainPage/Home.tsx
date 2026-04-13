@@ -15,7 +15,6 @@ import {
 } from "@dnd-kit/sortable";
 import { RoomButton } from "../../Components/RoomButton";
 import { DroppableZone, REGION } from "../../Components/DroppableZone";
-import { ChatArea } from "./ChatArea";
 import { useChatData } from "../../Context/DataContext";
 import { useUser } from "../../Context/userContext";
 import { Message } from "../../db";
@@ -28,12 +27,13 @@ import {
   handleDragOver,
   handleDragStart,
 } from "./Hooks/useDragDrop";
-import { handleMessageChange, useSendMessage } from "./Hooks/useRoomMessages";
 import {
   handleCloseRoom,
   handlePopUpSubmit,
   handleRoomSelect,
 } from "./Hooks/useRooms";
+import { ChatWindow } from "./ChatWindow";
+import { handleMessageChange, useSendMessage } from "./Hooks/useRoomMessages";
 
 function HomePage() {
   const { userData } = useUser();
@@ -58,7 +58,7 @@ function HomePage() {
   const [currentRegion, setCurrentRegion] = useState<REGION>(null);
   const [currentRegionId, setCurrentRegionID] = useState<string | null>(null);
 
-  const { updateMessage } = useChatData();
+  const { updateMessage, saveChatData } = useChatData();
 
   const handleJoinRoomPopUpOpen = () => {
     setIsJoinRoomPopupOpen(true);
@@ -235,40 +235,57 @@ function HomePage() {
             <div className="main-container">
               <div className={"multi-chat-container"}>
                 {selectedRooms.slice(0, 3).map((room) => (
-                  <DroppableZone
-                    key={room.id}
-                    id={`chat-${room.id}`}
-                    className="chat-window"
-                    hoveredRegion={
-                      currentRegionId === `chat-${room.id}`
-                        ? currentRegion
-                        : null
+                  <ChatWindow
+                    room={room}
+                    currentRegionId={currentRegionId}
+                    selectedRooms={selectedRooms}
+                    currentRegion={currentRegion}
+                    allMessages={allMessages}
+                    newMessage={newMessage}
+                    onClose={() =>
+                      handleCloseRoom(
+                        room.id.toString(),
+                        selectedRooms,
+                        setSelectedRooms,
+                        setActiveRoomIndex,
+                        activeRoomIndex,
+                      )
                     }
-                  >
-                    <div className="chat-header">
-                      <span className="chat-header-title"># {room.name}</span>
-                      {selectedRooms.length > 1 && (
-                        <button
-                          className="close-chat-btn"
-                          onClick={() =>
-                            handleCloseRoom(
-                              room.id.toString(),
-                              selectedRooms,
-                              setSelectedRooms,
-                              setActiveRoomIndex,
-                              activeRoomIndex,
-                            )
-                          }
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                    ``
-                    <ChatArea
-                      selectedRoom={{ id: room.id, name: room.name }}
-                      messages={allMessages[room.id] || []}
-                      newMessage={newMessage[room.id] || ""}
+                    onMessageChange={handleMessageChange(
+                      room.id,
+                      setNewMessage,
+                    )}
+                    onSendMessage={useSendMessage(
+                      room.id,
+                      userData!,
+                      newMessage,
+                      setAllMessages,
+                      setNewMessage,
+                      saveChatData,
+                    )}
+                  />
+                ))}
+              </div>
+
+              {selectedRooms.length >= 4 && (
+                <div className={"multi-chat-container"}>
+                  {selectedRooms.slice(3, 6).map((room) => (
+                    <ChatWindow
+                      room={room}
+                      currentRegionId={currentRegionId}
+                      selectedRooms={selectedRooms}
+                      currentRegion={currentRegion}
+                      allMessages={allMessages}
+                      newMessage={newMessage}
+                      onClose={() =>
+                        handleCloseRoom(
+                          room.id.toString(),
+                          selectedRooms,
+                          setSelectedRooms,
+                          setActiveRoomIndex,
+                          activeRoomIndex,
+                        )
+                      }
                       onMessageChange={handleMessageChange(
                         room.id,
                         setNewMessage,
@@ -279,61 +296,9 @@ function HomePage() {
                         newMessage,
                         setAllMessages,
                         setNewMessage,
+                        saveChatData,
                       )}
                     />
-                  </DroppableZone>
-                ))}
-              </div>
-
-              {selectedRooms.length >= 4 && (
-                <div className={"multi-chat-container"}>
-                  {selectedRooms.slice(3, 6).map((room) => (
-                    <DroppableZone
-                      key={room.id}
-                      id={`chat-${room.id}`}
-                      className="chat-window"
-                      hoveredRegion={
-                        currentRegionId === `chat-${room.id}`
-                          ? currentRegion
-                          : null
-                      }
-                    >
-                      <div className="chat-header">
-                        <span className="chat-header-title"># {room.name}</span>
-                        {selectedRooms.length > 1 && (
-                          <button
-                            className="close-chat-btn"
-                            onClick={() =>
-                              handleCloseRoom(
-                                room.id.toString(),
-                                selectedRooms,
-                                setSelectedRooms,
-                                setActiveRoomIndex,
-                                activeRoomIndex,
-                              )
-                            }
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                      <ChatArea
-                        selectedRoom={room}
-                        messages={allMessages[room.id] || []}
-                        newMessage={newMessage[room.id] || ""}
-                        onMessageChange={handleMessageChange(
-                          room.id,
-                          setNewMessage,
-                        )}
-                        onSendMessage={useSendMessage(
-                          room.id,
-                          userData!,
-                          newMessage,
-                          setAllMessages,
-                          setNewMessage,
-                        )}
-                      />
-                    </DroppableZone>
                   ))}
                 </div>
               )}
