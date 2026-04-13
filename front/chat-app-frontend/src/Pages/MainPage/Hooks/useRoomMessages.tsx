@@ -4,7 +4,7 @@ import { UserInfo } from "../../../bindings";
 import { MessagePayload, MessageResponse, commands } from "../../../bindings";
 import { Message } from "../../../db";
 
-export const useSendMessage =
+export const handleSendMessage =
   (
     roomId: string,
     userData: UserInfo,
@@ -14,7 +14,6 @@ export const useSendMessage =
     saveChatData: (mgs: Message) => void,
   ) =>
   (e: React.FormEvent) => {
-    //use call back to cache the function, but it is heavy so don't use it everywhere
     e.preventDefault();
 
     if (!userData || !userData.id) {

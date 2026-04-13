@@ -3,6 +3,7 @@ import { DroppableZone, REGION } from "../../Components/DroppableZone";
 import { MessageMap } from "./Hooks/useRooms";
 import { ChatArea } from "./ChatArea";
 import { NewMessageMap } from "./Hooks/useRoomMessages";
+import { Dispatch, SetStateAction } from "react";
 
 interface ChatWindowProps {
   room: RoomLitePayload;
@@ -14,6 +15,7 @@ interface ChatWindowProps {
   onClose: () => void;
   onMessageChange: (v: string) => void;
   onSendMessage: (e: React.FormEvent) => void;
+  setAllMessages: Dispatch<SetStateAction<MessageMap>>;
 }
 
 export function ChatWindow({
@@ -26,6 +28,7 @@ export function ChatWindow({
   onClose,
   onMessageChange,
   onSendMessage,
+  setAllMessages,
 }: ChatWindowProps) {
   return (
     <DroppableZone
@@ -50,6 +53,7 @@ export function ChatWindow({
         newMessage={newMessage[room.id] || ""}
         onMessageChange={onMessageChange}
         onSendMessage={onSendMessage}
+        setAllMessages={setAllMessages}
       />
     </DroppableZone>
   );

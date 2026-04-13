@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -159,23 +158,24 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 }
 
 func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id string) ([]RoomMessage, error) {
+	log.Println("FETCHING MESSAGE WITH OFFSET: ", offset_id)
 	//check in redis first
-	key := fmt.Sprintf("room:%s:recent_messages", room_id)
-	redis_data, err := app.redis_db.LRange(ctx, key, 0, 49).Result()
+	// key := fmt.Sprintf("room:%s:recent_messages", room_id)
+	// redis_data, err := app.redis_db.LRange(ctx, key, 0, 49).Result()
 
-	if err == nil && len(redis_data) > 0 {
-		log.Println("Getting data from redis for room: ", room_id)
-		var messages []RoomMessage
-		for _, item := range redis_data {
-			var m RoomMessage
-			if err := json.Unmarshal([]byte(item), &m); err == nil {
-				messages = append(messages, m)
-			} else {
-				log.Println("Failed to unmarshal cached data")
-			}
-		}
-		return messages, nil
-	}
+	// if err == nil && len(redis_data) > 0 {
+	// 	log.Println("Getting data from redis for room: ", room_id)
+	// 	var messages []RoomMessage
+	// 	for _, item := range redis_data {
+	// 		var m RoomMessage
+	// 		if err := json.Unmarshal([]byte(item), &m); err == nil {
+	// 			messages = append(messages, m)
+	// 		} else {
+	// 			log.Println("Failed to unmarshal cached data")
+	// 		}
+	// 	}
+	// 	return messages, nil
+	// }
 
 	schema := "chat"
 	if schema == "" {
@@ -236,19 +236,21 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 		return nil, fmt.Errorf("There's an error during iterating rows array: %w", err)
 	}
 
-	//only cache if offset_id == "" -> need newest message
-	if offset_id == "" && len(messages) > 0 {
-		app.redis_db.Del(ctx, key)
+	log.Println("MESSAGES: ", messages)
 
-		var redis_cache_interface []interface{}
-		for _, m := range messages {
-			msg, _ := json.Marshal(m)
-			redis_cache_interface = append(redis_cache_interface, msg)
-		}
-		app.redis_db.LPush(ctx, key, redis_cache_interface...)
-		//keep only 50 newest message (could be bigger but that will come later)
-		app.redis_db.LTrim(ctx, key, 0, 49)
-	}
+	//only cache if offset_id == "" -> need newest message
+	// if offset_id == "" && len(messages) > 0 {
+	// 	app.redis_db.Del(ctx, key)
+
+	// 	var redis_cache_interface []interface{}
+	// 	for _, m := range messages {
+	// 		msg, _ := json.Marshal(m)
+	// 		redis_cache_interface = append(redis_cache_interface, msg)
+	// 	}
+	// 	app.redis_db.LPush(ctx, key, redis_cache_interface...)
+	// 	//keep only 50 newest message (could be bigger but that will come later)
+	// 	app.redis_db.LTrim(ctx, key, 0, 49)
+	// }
 
 	return messages, nil
 }

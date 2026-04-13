@@ -1,14 +1,24 @@
-import { useRef, useEffect, useCallback } from "react";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  Dispatch,
+  SetStateAction,
+  useState,
+} from "react";
 import { commands, MessageResponse } from "../../bindings";
 import { useUser } from "../../Context/userContext";
 import { Virtuoso } from "react-virtuoso";
-import { load } from "@tauri-apps/plugin-store";
+import { handleMessageChange } from "./Hooks/useRoomMessages";
+import { MessageMap } from "./Hooks/useRooms";
+
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
   messages: MessageResponse[];
   newMessage: string;
   onMessageChange: (value: string) => void;
   onSendMessage: (e: React.FormEvent) => void;
+  setAllMessages: Dispatch<SetStateAction<MessageMap>>;
 }
 
 export function ChatArea({
@@ -17,7 +27,10 @@ export function ChatArea({
   newMessage,
   onMessageChange,
   onSendMessage,
+  setAllMessages,
 }: ChatAreaProps) {
+  const [firstItemIdex, setFirstItemIndex] = useState(1_000_000);
+  const isLoadingMore = useRef(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
   const { userData } = useUser();
 
@@ -27,13 +40,36 @@ export function ChatArea({
     }
   }, [messages, selectedRoom]);
 
+  useEffect(() => {
+    setFirstItemIndex(1_000_000);
+    isLoadingMore.current = false;
+  }, [selectedRoom.id]);
+
   const loadMore = useCallback(async () => {
+    if (isLoadingMore.current || messages.length === 0) return;
+    isLoadingMore.current = true;
+    console.log("Reached old messages, fetching more .....");
     //load more data
-    const data = await commands.fetchRoomMessages(
+    const result = await commands.fetchRoomMessages(
       selectedRoom.id,
-      messages[messages.length - 1].id,
+      messages[0].id,
     );
-  }, [messages]);
+
+    if (result.status === "ok") {
+      if (result.data != null) {
+        const reversedData = result.data.reverse();
+        setFirstItemIndex((prev) => prev - reversedData.length);
+        setAllMessages((prev) => ({
+          ...prev,
+          [selectedRoom.id]: [...reversedData, ...prev[selectedRoom.id]],
+        }));
+      }
+    } else {
+      console.error("Error fetching rooms: ", result.error);
+    }
+
+    isLoadingMore.current = false;
+  }, [messages, selectedRoom.id, setAllMessages]);
 
   return (
     <div className="chat-area">
@@ -42,7 +78,8 @@ export function ChatArea({
         totalCount={messages.length}
         data={messages}
         followOutput="smooth"
-        endReached={loadMore}
+        startReached={loadMore}
+        firstItemIndex={firstItemIdex}
         //start from last index
         initialTopMostItemIndex={messages.length - 1}
         itemContent={(index, msg) => (

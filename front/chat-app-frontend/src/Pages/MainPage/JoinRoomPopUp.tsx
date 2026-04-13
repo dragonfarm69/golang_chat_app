@@ -1,6 +1,5 @@
 import { useState } from "react";
 import "../../App.css";
-import { fa } from "@faker-js/faker";
 
 interface JoinRoomPopUpProps {
   onClose: () => void;
@@ -11,10 +10,9 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
   const [formInputValue, setFormInputValue] = useState("");
   const [formCreateRoomState, setFormCreateRoomState] = useState(false);
 
-  const handleSubmit = (value: string) => {
+  const handleSubmit = () => {
     try {
       if (formCreateRoomState) {
-        console.log(value);
         onSubmit(formInputValue, true);
       } else {
         onSubmit(formInputValue, false);
@@ -36,7 +34,7 @@ function JoinRoomPopUp({ onClose, onSubmit }: JoinRoomPopUpProps) {
           className="room-form"
           onSubmit={(e) => {
             e.preventDefault();
-            handleSubmit(formInputValue);
+            handleSubmit();
           }}
         >
           <input

@@ -33,7 +33,10 @@ import {
   handleRoomSelect,
 } from "./Hooks/useRooms";
 import { ChatWindow } from "./ChatWindow";
-import { handleMessageChange, useSendMessage } from "./Hooks/useRoomMessages";
+import {
+  handleMessageChange,
+  handleSendMessage,
+} from "./Hooks/useRoomMessages";
 
 function HomePage() {
   const { userData } = useUser();
@@ -242,6 +245,7 @@ function HomePage() {
                     currentRegion={currentRegion}
                     allMessages={allMessages}
                     newMessage={newMessage}
+                    setAllMessages={setAllMessages}
                     onClose={() =>
                       handleCloseRoom(
                         room.id.toString(),
@@ -255,7 +259,7 @@ function HomePage() {
                       room.id,
                       setNewMessage,
                     )}
-                    onSendMessage={useSendMessage(
+                    onSendMessage={handleSendMessage(
                       room.id,
                       userData!,
                       newMessage,
@@ -277,6 +281,7 @@ function HomePage() {
                       currentRegion={currentRegion}
                       allMessages={allMessages}
                       newMessage={newMessage}
+                      setAllMessages={setAllMessages}
                       onClose={() =>
                         handleCloseRoom(
                           room.id.toString(),
@@ -290,7 +295,7 @@ function HomePage() {
                         room.id,
                         setNewMessage,
                       )}
-                      onSendMessage={useSendMessage(
+                      onSendMessage={handleSendMessage(
                         room.id,
                         userData!,
                         newMessage,
