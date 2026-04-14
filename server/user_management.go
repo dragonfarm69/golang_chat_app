@@ -166,7 +166,24 @@ func createNewUser(ctx context.Context, adminClient *http.Client, user RegisterP
 	return nil
 }
 
-func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
+func (app *App) fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
+	//check in redis first
+	key := fmt.Sprintf("user:%s", username)
+	log.Println("Fetching cache data with key: ", key)
+	value, err := app.redis_db.Get(ctx, key).Result()
+	if err == nil {
+		var userInfo UserPayload
+		err = json.Unmarshal([]byte(value), &userInfo)
+		if err == nil {
+			log.Println("Got user data from redis: ")
+			return userInfo, nil
+		}
+
+		log.Println("Error when trying to marshal: ", err)
+	}
+
+	log.Println("User not found or error: ", err)
+
 	schema := "chat"
 	if schema == "" {
 		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
@@ -175,11 +192,11 @@ func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
 	table := pgx.Identifier{schema, "users"}.Sanitize()
 
 	sql := fmt.Sprintf(`
-		SELECT id, username, email, avatar_url, status, created_at, updated_at FROM %s WHERE email = $1
+		SELECT id, username, email, avatar_url, status, created_at, updated_at FROM %s WHERE username = $1
 	`, table)
 
 	var user UserModel
-	err := Pool.QueryRow(ctx, sql, username).Scan(
+	err = Pool.QueryRow(ctx, sql, username).Scan(
 		&user.id,
 		&user.username,
 		&user.email,
@@ -210,6 +227,10 @@ func fetchUserInfo(ctx context.Context, username string) (UserPayload, error) {
 		timeStr := user.updated_at.Time.Format(time.RFC3339)
 		userInfo.UpdatedAt = &timeStr
 	}
+
+	//cache user information
+	log.Println("User not found - Caching user data")
+	app.cacheUserInfoRequest(ctx, userInfo)
 
 	return userInfo, nil
 }
@@ -282,4 +303,11 @@ func (app *App) is_token_blacklisted(ctx context.Context, token string) (bool, e
 	} else {
 		return false, nil
 	}
+}
+
+func (app *App) cacheUserInfoRequest(ctx context.Context, user_info UserPayload) {
+	key := fmt.Sprintf("user:%s", user_info.Username)
+	info, _ := json.Marshal(user_info)
+	//TTL: 3 hours
+	app.redis_db.Set(ctx, key, info, 3*time.Hour)
 }

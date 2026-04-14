@@ -274,14 +274,14 @@ async fn fetch_account_info() -> Result<UserInfo, String> {
         let user_data_keycloak: serde_json::Value =
             serde_json::from_str(&result).map_err(|e| e.to_string())?;
 
-        let email = user_data_keycloak["email"]
+        let username = user_data_keycloak["preferred_username"]
             .as_str()
-            .ok_or("Email not found in Keycloak response")?;
+            .ok_or("username not found in Keycloak response")?;
 
         //fetch the info from the db
         let url = format!(
             "http://localhost:8080/api/fetch_user_info?username={}",
-            email
+            username
         );
         let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 

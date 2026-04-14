@@ -339,7 +339,7 @@ func main() {
 		}
 
 		ctx := r.Context()
-		user, err := fetchUserInfo(ctx, username)
+		user, err := app.fetchUserInfo(ctx, username)
 
 		if err != nil {
 			log.Println(err)
