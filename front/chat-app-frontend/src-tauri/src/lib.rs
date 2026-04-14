@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use futures_util::{lock::Mutex, SinkExt, StreamExt};
 use jsonwebtoken::Validation;
 use jsonwebtoken::{decode, decode_header, TokenData};
@@ -9,14 +10,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use specta::Type;
 use specta_typescript::Typescript;
-use std::{env, string};
+use std::env;
 use std::sync::{Arc, RwLock};
 use tauri::{Emitter, State};
 use tauri_specta::{collect_commands, Builder};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::connect_async;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TokenResponse {
@@ -93,6 +93,7 @@ pub struct MessagePayload {
     pub user_id: String,
     pub room_id: String,
     pub content: String,
+    pub username: String,
     pub timeStamp: String,
     pub action: String,
 }
@@ -278,7 +279,10 @@ async fn fetch_account_info() -> Result<UserInfo, String> {
             .ok_or("Email not found in Keycloak response")?;
 
         //fetch the info from the db
-        let url = format!("http://localhost:8080/api/fetch_user_info?username={}", email);
+        let url = format!(
+            "http://localhost:8080/api/fetch_user_info?username={}",
+            email
+        );
         let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
         let user_info_db = res.text().await.map_err(|e| e.to_string())?;
@@ -409,13 +413,18 @@ async fn checkLoginStatus(state: tauri::State<'_, AppState>) -> Result<bool, Str
         let accesss_token_clone = access_token.clone();
 
         let payload_b64 = accesss_token_clone.split('.').nth(1).ok_or("invalid jwt")?;
-        
-        let payload = URL_SAFE_NO_PAD.decode(payload_b64).map_err(|e| e.to_string())?;
+
+        let payload = URL_SAFE_NO_PAD
+            .decode(payload_b64)
+            .map_err(|e| e.to_string())?;
 
         let claims: TokenClaims = serde_json::from_slice(&payload).map_err(|e| e.to_string())?;
         let current_time: DateTime<Utc> = Utc::now();
 
-        let exp_i64: i64 = claims.exp.try_into().map_err(|e: std::num::TryFromIntError| e.to_string())?;
+        let exp_i64: i64 = claims
+            .exp
+            .try_into()
+            .map_err(|e: std::num::TryFromIntError| e.to_string())?;
 
         let expire_time =
             DateTime::from_timestamp(exp_i64, 0).ok_or_else(|| "invalid timeStamp".to_string())?;
@@ -425,7 +434,7 @@ async fn checkLoginStatus(state: tauri::State<'_, AppState>) -> Result<bool, Str
         }
 
         match validate_token(&access_token, keys).await {
-            Ok(_) => {    
+            Ok(_) => {
                 println!("True");
                 Ok(true)
             }
@@ -434,12 +443,10 @@ async fn checkLoginStatus(state: tauri::State<'_, AppState>) -> Result<bool, Str
                 Ok(false)
             }
         }
-
     } else {
         return Ok(false);
     }
 }
-
 
 #[tauri::command]
 #[specta::specta]
@@ -454,9 +461,14 @@ async fn checkAuth(state: tauri::State<'_, AppState>) -> Result<bool, String> {
         let accesss_token_clone = access_token.clone();
 
         let payload_b64 = accesss_token_clone.split('.').nth(1).ok_or("invalid jwt")?;
-        let payload = URL_SAFE_NO_PAD.decode(payload_b64).map_err(|e| e.to_string())?;
+        let payload = URL_SAFE_NO_PAD
+            .decode(payload_b64)
+            .map_err(|e| e.to_string())?;
         let claims: TokenClaims = serde_json::from_slice(&payload).map_err(|e| e.to_string())?;
-        let exp_i64: i64 = claims.exp.try_into().map_err(|e: std::num::TryFromIntError| e.to_string())?;
+        let exp_i64: i64 = claims
+            .exp
+            .try_into()
+            .map_err(|e: std::num::TryFromIntError| e.to_string())?;
 
         let expire_time =
             DateTime::from_timestamp(exp_i64, 0).ok_or_else(|| "invalid timeStamp".to_string())?;
@@ -563,7 +575,12 @@ async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, Strin
     let client = reqwest::Client::new();
     let url = format!("{}/api/room?user_id={}", BACKEND_URL, user_id);
     let access_token = get_data_from_keyring("access_token".to_string())?;
-    let res = client.get(&url).bearer_auth(&access_token).send().await.map_err(|e| e.to_string())?;
+    let res = client
+        .get(&url)
+        .bearer_auth(&access_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         let text = res.text().await.map_err(|e| e.to_string())?;
@@ -582,15 +599,24 @@ async fn fetch_rooms_list(user_id: String) -> Result<Vec<RoomLitePayload>, Strin
 
 #[tauri::command]
 #[specta::specta]
-async fn fetch_room_messages(room_id: String, offset_id: String) -> Result<Vec<MessageResponse>, String> {
+async fn fetch_room_messages(
+    room_id: String,
+    offset_id: String,
+) -> Result<Vec<MessageResponse>, String> {
     let client = reqwest::Client::new();
     let url = format!("{}/api/fetch_room_message", BACKEND_URL);
     let access_token = get_data_from_keyring("access_token".to_string())?;
 
-    let res = client.get(&url).json(&serde_json::json!({
-        "room_id": room_id,
-        "offset_id": offset_id
-    })).bearer_auth(&access_token).send().await.map_err(|e| e.to_string())?;
+    let res = client
+        .get(&url)
+        .json(&serde_json::json!({
+            "room_id": room_id,
+            "offset_id": offset_id
+        }))
+        .bearer_auth(&access_token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         let text = res.text().await.map_err(|e| e.to_string())?;
@@ -608,7 +634,7 @@ async fn fetch_room_messages(room_id: String, offset_id: String) -> Result<Vec<M
 }
 
 #[tauri::command]
-#[specta::specta] 
+#[specta::specta]
 async fn join_room(user_id: String, invite_code: String) -> Result<bool, String> {
     let client = reqwest::Client::new();
     let access_token = get_data_from_keyring("access_token".to_string())?;
@@ -616,13 +642,12 @@ async fn join_room(user_id: String, invite_code: String) -> Result<bool, String>
     let url = format!("{}/api/join", BACKEND_URL);
 
     let res = client
-    .post(&url)
-    .bearer_auth(&access_token)
-    .json(&serde_json::json!({"user_id": user_id, "invite_code": invite_code}))
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-
+        .post(&url)
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({"user_id": user_id, "invite_code": invite_code}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         Ok(true)
@@ -637,7 +662,7 @@ async fn join_room(user_id: String, invite_code: String) -> Result<bool, String>
 }
 
 #[tauri::command]
-#[specta::specta] 
+#[specta::specta]
 async fn create_room(user_id: String, room_name: String) -> Result<bool, String> {
     let client = reqwest::Client::new();
     let access_token = get_data_from_keyring("access_token".to_string())?;
@@ -645,13 +670,12 @@ async fn create_room(user_id: String, room_name: String) -> Result<bool, String>
     let url = format!("{}/api/room", BACKEND_URL);
 
     let res = client
-    .post(&url)
-    .bearer_auth(&access_token)
-    .json(&serde_json::json!({"user_id": user_id, "room_name": room_name}))
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-
+        .post(&url)
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({"user_id": user_id, "room_name": room_name}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if res.status().is_success() {
         Ok(true)

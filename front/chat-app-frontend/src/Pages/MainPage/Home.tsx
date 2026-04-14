@@ -110,6 +110,7 @@ function HomePage() {
         const new_msg_data: Message = {
           id: msg.id,
           user_id: userData.id,
+          username: userData.username,
           room_id: msg.room_id,
           content: msg.content,
           timeStamp: msg.timeStamp,

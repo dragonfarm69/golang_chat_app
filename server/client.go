@@ -36,6 +36,7 @@ type Client struct {
 type MessagePayload struct {
 	Id        string `json:"id"`
 	User_ID   string `json:"user_id"`
+	UserName  string `json:"username"`
 	Room_ID   string `json:"room_id"`
 	Content   string `json:"content"`
 	TimeStamp string `json:"timeStamp"`
@@ -46,6 +47,7 @@ type ResponseMessagePayload struct {
 	OriginalId string `json:"original_id"`
 	Id         string `json:"id"`
 	User_ID    string `json:"user_id"`
+	UserName   string `json:"username"`
 	Room_ID    string `json:"room_id"`
 	Content    string `json:"content"`
 	TimeStamp  string `json:"timeStamp"`
@@ -61,7 +63,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func (c *Client) handleIncomingMessages() {
+func (app *App) handleIncomingMessages(c *Client) {
 	defer func() {
 		// c.hub.broadcaster <- []byte("a client has left")
 		// c.hub.unregister <- c
@@ -106,6 +108,7 @@ func (c *Client) handleIncomingMessages() {
 					OriginalId: msg.Id,
 					Id:         messageId,
 					User_ID:    msg.User_ID,
+					UserName:   msg.UserName,
 					Room_ID:    msg.Room_ID,
 					Content:    msg.Content,
 					Action:     msg.Action,
@@ -124,6 +127,8 @@ func (c *Client) handleIncomingMessages() {
 				}
 
 				log.Println("Saved message successfully with id: ", id)
+
+				app.addNewMessageToRedis(ctx, msg)
 
 				jsonPayload, err := json.Marshal(responsePayload)
 				if err != nil {
@@ -145,7 +150,7 @@ func (c *Client) handleIncomingMessages() {
 	}
 }
 
-func (c *Client) handleOutgoingMessages() {
+func (app *App) handleOutgoingMessages(c *Client) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -189,7 +194,7 @@ func (c *Client) handleOutgoingMessages() {
 	}
 }
 
-func serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, client_id string) {
+func (app *App) serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, client_id string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 
 	if err != nil {
@@ -199,8 +204,8 @@ func serveWs(hubManager *HubManager, w http.ResponseWriter, r *http.Request, cli
 
 	client := &Client{id: client_id, hubs: hubManager, connection: conn, send: make(chan []byte, 256)}
 
-	go client.handleIncomingMessages()
-	go client.handleOutgoingMessages()
+	go app.handleIncomingMessages(client)
+	go app.handleOutgoingMessages(client)
 
 	log.Printf("New client connected (UUID): %s", client.id)
 }

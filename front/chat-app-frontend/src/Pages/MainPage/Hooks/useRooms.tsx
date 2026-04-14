@@ -82,6 +82,7 @@ export const handleRoomSelect = async (
   const messagePayload: MessagePayload = {
     id: tempId,
     user_id: userData.id,
+    username: userData.username,
     room_id: room.id,
     content: "",
     timeStamp: "",

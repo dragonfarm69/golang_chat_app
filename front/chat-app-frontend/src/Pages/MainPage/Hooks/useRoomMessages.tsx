@@ -35,6 +35,7 @@ export const handleSendMessage =
     const messagePayload: MessagePayload = {
       id: tempId,
       user_id: userData.id,
+      username: userData.username,
       room_id: roomId,
       content: messageText,
       timeStamp: timestamp,
@@ -62,6 +63,7 @@ export const handleSendMessage =
       id: tempId,
       room_id: roomId.toString(),
       user_id: userData.id,
+      username: userData.username,
       content: messageText,
       timeStamp: timestamp,
     };

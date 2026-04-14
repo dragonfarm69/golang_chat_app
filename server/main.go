@@ -146,7 +146,7 @@ func main() {
 			return
 		}
 
-		serveWs(hubManager, w, r, user_id)
+		app.serveWs(hubManager, w, r, user_id)
 	})
 	mux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

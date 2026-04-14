@@ -132,7 +132,7 @@ async createRoom(userId: string, roomName: string) : Promise<Result<boolean, str
 
 /** user-defined types **/
 
-export type MessagePayload = { id: string; user_id: string; room_id: string; content: string; timeStamp: string; action: string }
+export type MessagePayload = { id: string; user_id: string; room_id: string; content: string; username: string; timeStamp: string; action: string }
 export type MessageResponse = { id: string; owner_name: string; room_id: string; content: string; timeStamp: string }
 export type RegisterPayload = { email: string; first_name: string; last_name: string; password: string }
 export type RoomLitePayload = { id: string; name: string; description: string; created_at: string; updated_at: string }
