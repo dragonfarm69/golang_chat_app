@@ -56,20 +56,15 @@ func createInviteCode() (string, error) {
 	return fmt.Sprintf("INV-%s", string(b)), nil
 }
 
-func fetchFullRoomDataBasedOnRoomId(ctx context.Context, room_id string) (Room, error) {
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-	table := pgx.Identifier{schema, "rooms"}.Sanitize()
+func (app *App) fetchFullRoomDataBasedOnRoomId(ctx context.Context, room_id string) (Room, error) {
+	table := pgx.Identifier{DBSchema, "rooms"}.Sanitize()
 
 	sql := fmt.Sprintf(`
 		SELECT * FROM %s WHERE id = $1
 	`, table)
 
 	var room Room
-	err := Pool.QueryRow(ctx, sql, room_id).Scan(
+	err := app.db_pool.QueryRow(ctx, sql, room_id).Scan(
 		&room.ID,
 		&room.Name,
 		&room.Description,
@@ -86,20 +81,15 @@ func fetchFullRoomDataBasedOnRoomId(ctx context.Context, room_id string) (Room, 
 	return room, nil
 }
 
-func fetchRoomLiteDataBasedOnRoomId(ctx context.Context, room_id string) (RoomLite, error) {
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-	table := pgx.Identifier{schema, "rooms"}.Sanitize()
+func (app *App) fetchRoomLiteDataBasedOnRoomId(ctx context.Context, room_id string) (RoomLite, error) {
+	table := pgx.Identifier{DBSchema, "rooms"}.Sanitize()
 
 	sql := fmt.Sprintf(`
 		SELECT * FROM %s WHERE id = $1
 	`, table)
 
 	var room RoomLite
-	err := Pool.QueryRow(ctx, sql, room_id).Scan(
+	err := app.db_pool.QueryRow(ctx, sql, room_id).Scan(
 		&room.ID,
 		&room.Name,
 		&room.Description,
@@ -114,14 +104,9 @@ func fetchRoomLiteDataBasedOnRoomId(ctx context.Context, room_id string) (RoomLi
 	return room, nil
 }
 
-func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, error) {
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-	roomsTable := pgx.Identifier{schema, "rooms"}.Sanitize()
-	membersTable := pgx.Identifier{schema, "room_members"}.Sanitize()
+func (app *App) fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, error) {
+	roomsTable := pgx.Identifier{DBSchema, "rooms"}.Sanitize()
+	membersTable := pgx.Identifier{DBSchema, "room_members"}.Sanitize()
 
 	sql := fmt.Sprintf(`
 		SELECT r.id, r.name, r.created_at, r.updated_at
@@ -130,7 +115,7 @@ func fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]RoomLite, e
 		where m.user_id = $1
 	`, roomsTable, membersTable)
 
-	rows, err := Pool.Query(ctx, sql, user_id)
+	rows, err := app.db_pool.Query(ctx, sql, user_id)
 	if err != nil {
 		return nil, fmt.Errorf("Query failed: %w", err)
 	}
@@ -178,13 +163,8 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 		return messages, nil
 	}
 
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-	messagesTable := pgx.Identifier{schema, "messages"}.Sanitize()
-	usersTable := pgx.Identifier{schema, "users"}.Sanitize()
+	messagesTable := pgx.Identifier{DBSchema, "messages"}.Sanitize()
+	usersTable := pgx.Identifier{DBSchema, "users"}.Sanitize()
 	var sql string
 	var args []interface{}
 	if offset_id == "" {
@@ -209,7 +189,7 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 		args = []interface{}{room_id, offset_id}
 	}
 
-	rows, err := Pool.Query(ctx, sql, args...)
+	rows, err := app.db_pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Query failed: %w", err)
 	}
@@ -256,21 +236,15 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 	return messages, nil
 }
 
-func addUserToRoom(ctx context.Context, userId string, invite_code string) error {
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-
+func (app *App) addUserToRoom(ctx context.Context, userId string, invite_code string) error {
 	//extract the room id
-	room_invites_table := pgx.Identifier{schema, "room_invitations"}.Sanitize()
+	room_invites_table := pgx.Identifier{DBSchema, "room_invitations"}.Sanitize()
 	room_invite_sql := fmt.Sprintf(`
 		SELECT room_id FROM %s WHERE invite_code = $1
 	`, room_invites_table)
 
 	var room_id string
-	err := Pool.QueryRow(ctx, room_invite_sql, invite_code).Scan(&room_id)
+	err := app.db_pool.QueryRow(ctx, room_invite_sql, invite_code).Scan(&room_id)
 
 	if err != nil {
 		return fmt.Errorf("Failed to query room invite %v", err)
@@ -282,12 +256,12 @@ func addUserToRoom(ctx context.Context, userId string, invite_code string) error
 
 	//make sure that the room exists
 	var room_name string
-	rooms_table := pgx.Identifier{schema, "rooms"}.Sanitize()
+	rooms_table := pgx.Identifier{DBSchema, "rooms"}.Sanitize()
 	rooms_table_sql := fmt.Sprintf(`
 		SELECT name FROM %s WHERE id = $1
 	`, rooms_table)
 
-	err = Pool.QueryRow(ctx, rooms_table_sql, room_id).Scan(&room_name)
+	err = app.db_pool.QueryRow(ctx, rooms_table_sql, room_id).Scan(&room_name)
 
 	if err != nil {
 		return fmt.Errorf("Failed to query room %v", err)
@@ -301,13 +275,13 @@ func addUserToRoom(ctx context.Context, userId string, invite_code string) error
 	// log.Println(room_name)
 
 	//add user to room
-	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
+	room_member_table := pgx.Identifier{DBSchema, "room_members"}.Sanitize()
 	sql := fmt.Sprintf(`
 		INSERT INTO %s (user_id, room_id, joined_at)
 		VALUES (@user_id, @room_id, @joined_at)
 	`, room_member_table)
 
-	_, err = Pool.Exec(ctx, sql, pgx.NamedArgs{
+	_, err = app.db_pool.Exec(ctx, sql, pgx.NamedArgs{
 		"user_id":   userId,
 		"room_id":   room_id,
 		"joined_at": time.Now(),
@@ -320,34 +294,28 @@ func addUserToRoom(ctx context.Context, userId string, invite_code string) error
 	return nil
 }
 
-func addUserToRoomByID(ctx context.Context, userId string, room_id string) error {
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-
+func (app *App) addUserToRoomByID(ctx context.Context, userId string, room_id string) error {
 	//make sure that the room exists
 	var room_name string
-	rooms_table := pgx.Identifier{schema, "rooms"}.Sanitize()
+	rooms_table := pgx.Identifier{DBSchema, "rooms"}.Sanitize()
 	rooms_table_sql := fmt.Sprintf(`
 		SELECT name FROM %s WHERE id = $1
 	`, rooms_table)
 
-	err := Pool.QueryRow(ctx, rooms_table_sql, room_id).Scan(&room_name)
+	err := app.db_pool.QueryRow(ctx, rooms_table_sql, room_id).Scan(&room_name)
 
 	if err != nil {
 		return fmt.Errorf("Failed to query room %v", err)
 	}
 
 	//add user to room
-	room_member_table := pgx.Identifier{schema, "room_members"}.Sanitize()
+	room_member_table := pgx.Identifier{DBSchema, "room_members"}.Sanitize()
 	sql := fmt.Sprintf(`
 		INSERT INTO %s (user_id, room_id, joined_at)
 		VALUES (@user_id, @room_id, @joined_at)
 	`, room_member_table)
 
-	_, err = Pool.Exec(ctx, sql, pgx.NamedArgs{
+	_, err = app.db_pool.Exec(ctx, sql, pgx.NamedArgs{
 		"user_id":   userId,
 		"room_id":   room_id,
 		"joined_at": time.Now(),
@@ -360,19 +328,18 @@ func addUserToRoomByID(ctx context.Context, userId string, room_id string) error
 	return nil
 }
 
-func createNewRoom(ctx context.Context, userId string, room_name string) error {
-	schema := "chat"
+func (app *App) createNewRoom(ctx context.Context, userId string, room_name string) error {
 	var room_id string
 
 	//create new room
-	room_table := pgx.Identifier{schema, "rooms"}.Sanitize()
+	room_table := pgx.Identifier{DBSchema, "rooms"}.Sanitize()
 	sql := fmt.Sprintf(`
 		INSERT INTO %s (name, owner_id)
 		VALUES (@name, @owner_id)
 		RETURNING id
 	`, room_table)
 
-	err := Pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"name":     room_name,
 		"owner_id": userId,
 	}).Scan(&room_id)
@@ -381,7 +348,10 @@ func createNewRoom(ctx context.Context, userId string, room_name string) error {
 		return fmt.Errorf("Failed to query room %v", err)
 	}
 
-	addUserToRoomByID(ctx, userId, room_id)
+	err = app.addUserToRoomByID(ctx, userId, room_id)
+	if err != nil {
+		return fmt.Errorf("Failed to add user to room %v", err)
+	}
 
 	//If fail then generate code again when user need it
 	//create new invite code
@@ -393,13 +363,13 @@ func createNewRoom(ctx context.Context, userId string, room_name string) error {
 			log.Printf("Failed to create invite code %v", err)
 		}
 
-		room_invites_table := pgx.Identifier{schema, "room_invitations"}.Sanitize()
+		room_invites_table := pgx.Identifier{DBSchema, "room_invitations"}.Sanitize()
 		sql = fmt.Sprintf(`
 		INSERT INTO %s (room_id, invited_by, invite_code)
 		VALUES (@room_id, @invited_by, @invite_code)
 		`, room_invites_table)
 
-		_, err = Pool.Exec(ctx, sql, pgx.NamedArgs{
+		_, err = app.db_pool.Exec(ctx, sql, pgx.NamedArgs{
 			"room_id":     room_id,
 			"invited_by":  userId,
 			"invite_code": invite_code,

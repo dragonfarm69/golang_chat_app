@@ -145,8 +145,7 @@ func (h *Hub) run() {
 			for client := range h.Clients {
 				select {
 				case client.send <- message:
-					//store message
-					h.messages = append(h.messages, payload)
+					continue
 				default:
 					close(client.send)
 					delete(h.Clients, client)

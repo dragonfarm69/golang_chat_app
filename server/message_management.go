@@ -10,18 +10,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func addNewMessageToDB(ctx context.Context, message MessagePayload) (string, error) {
-	schema := "chat"
+func (app *App) addNewMessageToDB(ctx context.Context, message MessagePayload) (string, error) {
 	sql := fmt.Sprintf(`
         INSERT INTO %s.messages (id, content, user_id, room_id, created_at, updated_at)
         VALUES (@id, @content, @user_id, @room_id, @created_at, @updated_at)
         RETURNING id
-    `, pgx.Identifier{schema}.Sanitize())
+    `, pgx.Identifier{DBSchema}.Sanitize())
 
 	var id string
 	createdAt, _ := time.Parse(time.RFC3339, message.TimeStamp)
 
-	err := Pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"id":         message.Id,
 		"content":    message.Content,
 		"room_id":    message.Room_ID,

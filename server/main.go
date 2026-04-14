@@ -1,17 +1,20 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 type JwksKey struct {
@@ -28,14 +31,51 @@ type JwkResponse struct {
 }
 
 type App struct {
-	redis_db *redis.Client
+	redis_db   *redis.Client
+	db_pool    *pgxpool.Pool
+	hubManager *HubManager
+	config     *clientcredentials.Config
+}
+
+func NewApp(ctx context.Context) (*App, error) {
+	//load env
+	dbURL := os.Getenv("DB_URL")
+
+	//load DB
+	log.Printf("Attempting to connect to database: %s", dbURL)
+	Pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		return nil, err
+	}
+
+	//load config
+	Config := &clientcredentials.Config{
+		ClientID:     os.Getenv("ADMIN_ID"),
+		ClientSecret: os.Getenv("ADMIN_SECRET"),
+		TokenURL:     os.Getenv("KEYCLOAK_TOKEN_URL"),
+	}
+
+	//load redis
+	opt, err := redis.ParseURL(os.Getenv("REDIS_URL"))
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("Attempting to connect to database: %s", os.Getenv("REDIS_URL"))
+	client := redis.NewClient(opt)
+
+	return &App{
+		redis_db:   client,
+		db_pool:    Pool,
+		config:     Config,
+		hubManager: newHubManager(),
+	}, nil
 }
 
 var addr = flag.String("addr", ":8080", "chat server service")
 var public_keys keyfunc.Keyfunc
 
-func fetch_publick_keys() {
-	// {keycloak-server}/realms/{realm-name}/protocol/openid-connect/certs
+func fetchPublicToken() {
 	var URL = getPublicKeyEndpoint()
 
 	var err error
@@ -45,7 +85,7 @@ func fetch_publick_keys() {
 	}
 }
 
-func is_valid_token(token string) bool {
+func isValidToken(token string) bool {
 	status, err := jwt.Parse(token, public_keys.Keyfunc)
 
 	if err != nil {
@@ -87,16 +127,18 @@ func (app *App) TokenValidation(next http.Handler) http.Handler {
 		parts := strings.Split(header, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
+			return
 		}
 		token := parts[1]
 
-		status := is_valid_token(token)
+		status := isValidToken(token)
 
 		ctx := r.Context()
 		//check if token is blacklisted
-		isBlacklisted, err := app.is_token_blacklisted(ctx, token)
+		isBlacklisted, err := app.isTokenBlacklisted(ctx, token)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
 
 		if isBlacklisted {
@@ -115,28 +157,17 @@ func (app *App) TokenValidation(next http.Handler) http.Handler {
 
 func main() {
 	flag.Parse()
-	hubManager := newHubManager()
-	// hub := newHub()
-	// go hub.run()
-
 	mux := http.NewServeMux()
-	fetch_publick_keys()
+	fetchPublicToken()
 
-	//redis connection
-	//TODO: SET UP ENV
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password
-		DB:       0,  // use default DB
-		Protocol: 2,
-	})
-	defer rdb.Close()
-
-	app := &App{
-		redis_db: rdb,
+	ctx := context.Background()
+	app, err := NewApp(ctx)
+	if err != nil {
+		panic(err)
 	}
+	defer app.db_pool.Close()
+	defer app.redis_db.Close()
 
-	hubManager.createNewHub("temp name")
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		// hubId := r.URL.Query().Get("hub")
 		user_id := r.URL.Query().Get("user_id")
@@ -146,67 +177,19 @@ func main() {
 			return
 		}
 
-		app.serveWs(hubManager, w, r, user_id)
+		app.serveWs(app.hubManager, w, r, user_id)
 	})
+	mux.HandleFunc("/logout", app.HandleLogOut)
+	mux.HandleFunc("/register", app.HandleRegister)
+	mux.HandleFunc("/refreshToken", app.HandleRefreshToken)
 	mux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		//get room list
 		case http.MethodGet:
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			user_id := r.URL.Query().Get("user_id")
-
-			if user_id == "" {
-				http.Error(w, "Can't be empty", http.StatusNotFound)
-				return
-			}
-
-			ctx := r.Context()
-			rooms, err := fetchRoomsBasedOnUserId(ctx, user_id)
-			log.Println(rooms)
-			if err != nil {
-				log.Println(err)
-				http.Error(w, "Failed to fetch room list", http.StatusInternalServerError)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(rooms)
+			app.HandleListRoom(w, r)
 		//create room
 		case http.MethodPost:
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-
-			var payload struct {
-				UserId   string `json:"user_id"`
-				RoomName string `json:"room_name"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				http.Error(w, "invalid json body", http.StatusBadRequest)
-				return
-			}
-
-			if payload.UserId == "" || payload.RoomName == "" {
-				http.Error(w, "user_id and room name are required", http.StatusBadRequest)
-				return
-			}
-
-			ctx := r.Context()
-			err := createNewRoom(ctx, payload.UserId, payload.RoomName)
-
-			if err != nil {
-				log.Println(err)
-				http.Error(w, "Failed to create room", http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
+			app.HandleCreateRoom(w, r)
 		//delete room
 		// case http.MethodDelete:
 
@@ -214,203 +197,10 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	mux.HandleFunc("/api/hublist", func(w http.ResponseWriter, r *http.Request) {
-		lists := hubManager.getHubListIds()
-		s := ""
-		for i, id := range lists {
-			if i > 0 {
-				s += ","
-			}
-			s += id
-		}
-		w.Write([]byte(s))
-	})
-	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		header := r.Header.Get("Authorization")
-		if header == "" {
-			http.Error(w, "Invalid header", http.StatusBadRequest)
-			return
-		}
-
-		parts := strings.Split(header, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
-		}
-		token := parts[1]
-
-		app.blacklist_token(ctx, token)
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode("User logged out successfully")
-	})
-	mux.HandleFunc("/disconnect/", func(w http.ResponseWriter, r *http.Request) {
-		log.Print("diconnecting")
-		hubId := r.URL.Query().Get("hub")
-		clientId := r.URL.Query().Get("client")
-		log.Println(hubId)
-		log.Println(clientId)
-
-		if hubId == "" || clientId == "" {
-			http.Error(w, "Can't be empty", http.StatusNotFound)
-			return
-		}
-
-		hub := hubManager.getHub(hubId)
-		if hub == nil {
-			http.Error(w, "404 Not found", http.StatusNotFound)
-			return
-		}
-
-		hub.disconnectClient(clientId)
-	})
-	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var payload RegisterPayload
-		err := json.NewDecoder(r.Body).Decode(&payload)
-
-		if err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		ctx := r.Context()
-		adminClient := Config.Client(ctx)
-
-		log.Println("payload: ", payload)
-
-		if err := createNewUser(ctx, adminClient, payload); err != nil {
-			log.Printf("Error creating new user: %v", err)
-			http.Error(w, "Failed to create user", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
-	})
-	mux.HandleFunc("/api/fetch_room_message", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var payload struct {
-			Room_id   string `json:"room_id"`
-			Offset_id string `json:"offset_id"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Failed to read body", http.StatusBadRequest)
-			return
-		}
-
-		if payload.Room_id == "" {
-			http.Error(w, "Room id is required", http.StatusBadRequest)
-			return
-		}
-
-		ctx := r.Context()
-		rooms, err := app.fetchRoomMessage(ctx, payload.Room_id, payload.Offset_id)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Failed to fetch room list", http.StatusInternalServerError)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(rooms)
-	})
-	mux.HandleFunc("/api/fetch_user_info", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		username := r.URL.Query().Get("username")
-
-		if username == "" {
-			http.Error(w, "Can't be empty", http.StatusNotFound)
-			return
-		}
-
-		ctx := r.Context()
-		user, err := app.fetchUserInfo(ctx, username)
-
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Failed to fetch user info", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(user)
-	})
-	mux.HandleFunc("/refreshToken", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var payload struct {
-			RefreshToken string `json:"refresh_token"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
-			return
-		}
-
-		if payload.RefreshToken == "" {
-			http.Error(w, "refresh_token is required", http.StatusBadRequest)
-			return
-		}
-
-		ctx := r.Context()
-		refreshUserToken(ctx, payload.RefreshToken)
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		// json.NewEncoder(w).Encode()
-	})
-	mux.HandleFunc("/api/join", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var payload struct {
-			UserId string `json:"user_id"`
-			RoomId string `json:"invite_code"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "invalid json body", http.StatusBadRequest)
-			return
-		}
-
-		if payload.UserId == "" || payload.RoomId == "" {
-			http.Error(w, "user_id and invite_code are required", http.StatusBadRequest)
-			return
-		}
-
-		ctx := r.Context()
-		err := addUserToRoom(ctx, payload.UserId, payload.RoomId)
-
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Failed to join room", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.HandleFunc("/api/disconnect/", app.HandleDisconnect)
+	mux.HandleFunc("/api/fetch_room_message", app.HandleFetchMessages)
+	mux.HandleFunc("/api/fetch_user_info", app.HandleFetchUserInfo)
+	mux.HandleFunc("/api/join", app.HandleJoinRoom)
 
 	//middleware
 	mux.Handle("/api", http.StripPrefix("/api", app.TokenValidation(mux)))
@@ -423,7 +213,7 @@ func main() {
 	})
 	handler := c.Handler(mux)
 
-	err := http.ListenAndServe(*addr, handler)
+	err = http.ListenAndServe(*addr, handler)
 	if err != nil {
 		log.Fatal("error when starting server: ", err)
 	}

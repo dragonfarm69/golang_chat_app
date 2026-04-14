@@ -61,14 +61,8 @@ type UserPayload struct {
 	UpdatedAt *string `json:"updated_at"` // Pointer for optional dates
 }
 
-func createUserOnDB(ctx context.Context, user RegisterPayload, userId string) error {
-	// Ensure schema is not empty, default to "public" if not set.
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-	table := pgx.Identifier{schema, "users"}.Sanitize()
+func (app *App) createUserOnDB(ctx context.Context, user RegisterPayload, userId string) error {
+	table := pgx.Identifier{DBSchema, "users"}.Sanitize()
 
 	sql := fmt.Sprintf(`
         INSERT INTO %s (id, email, username, avatar_url, created_at, updated_at)
@@ -79,7 +73,7 @@ func createUserOnDB(ctx context.Context, user RegisterPayload, userId string) er
 	var id string
 	fullName := fmt.Sprintf("%s %s", user.FirstName, user.LastName)
 
-	err := Pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"id":         userId,
 		"username":   fullName,
 		"email":      user.Email,
@@ -145,7 +139,7 @@ func createUserOnKeyCloak(ctx context.Context, adminClient *http.Client, user Re
 	return userId, nil
 }
 
-func createNewUser(ctx context.Context, adminClient *http.Client, user RegisterPayload) error {
+func (app *App) createNewUser(ctx context.Context, adminClient *http.Client, user RegisterPayload) error {
 	//create unique ID for the user.
 	UserKeycloakId, err := createUserOnKeyCloak(ctx, adminClient, user)
 	if err != nil {
@@ -156,7 +150,7 @@ func createNewUser(ctx context.Context, adminClient *http.Client, user RegisterP
 	log.Println("User uuid: ", UserKeycloakId)
 
 	//use the keycloak user id for db
-	err = createUserOnDB(ctx, user, UserKeycloakId)
+	err = app.createUserOnDB(ctx, user, UserKeycloakId)
 
 	if err != nil {
 		log.Printf("Failed to create user on DB: %v", err)
@@ -184,19 +178,14 @@ func (app *App) fetchUserInfo(ctx context.Context, username string) (UserPayload
 
 	log.Println("User not found or error: ", err)
 
-	schema := "chat"
-	if schema == "" {
-		log.Println("Warning: DB_SCHEMA is not set, defaulting to 'public'")
-		schema = "public"
-	}
-	table := pgx.Identifier{schema, "users"}.Sanitize()
+	table := pgx.Identifier{DBSchema, "users"}.Sanitize()
 
 	sql := fmt.Sprintf(`
 		SELECT id, username, email, avatar_url, status, created_at, updated_at FROM %s WHERE username = $1
 	`, table)
 
 	var user UserModel
-	err = Pool.QueryRow(ctx, sql, username).Scan(
+	err = app.db_pool.QueryRow(ctx, sql, username).Scan(
 		&user.id,
 		&user.username,
 		&user.email,
@@ -281,7 +270,7 @@ func refreshUserToken(ctx context.Context, refresh_token string) {
 	// return string(body)
 }
 
-func (app *App) blacklist_token(ctx context.Context, token string) {
+func (app *App) blacklistToken(ctx context.Context, token string) {
 	//1 hour of black list
 	err := app.redis_db.Set(ctx, "blacklist:"+token, "1", 1*time.Hour).Err()
 	if err != nil {
@@ -290,7 +279,7 @@ func (app *App) blacklist_token(ctx context.Context, token string) {
 	}
 }
 
-func (app *App) is_token_blacklisted(ctx context.Context, token string) (bool, error) {
+func (app *App) isTokenBlacklisted(ctx context.Context, token string) (bool, error) {
 	val, err := app.redis_db.Exists(ctx, "blacklist:"+token).Result()
 	if err != nil {
 		log.Println("Error when trying to search for token: ", err)

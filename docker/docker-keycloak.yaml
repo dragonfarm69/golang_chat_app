@@ -12,7 +12,11 @@ services:
     networks:
       - keycloak_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${DATAB_BASE_NAME}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DATABASE_USERNAME} -d ${DATAB_BASE_NAME}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,7 +24,7 @@ services:
       resources:
         limits:
           memory: 2G
-          cpus: '4.0'
+          cpus: "4.0"
         reservations:
           memory: 512M
 
@@ -46,14 +50,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G  # Hard limit of 2 Gigabytes
-          cpus: '4.0' # Hard limit of 4 CPU cores
+          memory: 2G # Hard limit of 2 Gigabytes
+          cpus: "4.0" # Hard limit of 4 CPU cores
         reservations:
           memory: 512M # Guaranteed minimum 512MB RAM
 
   redis:
     image: redis:7-alpine
-    command: redis-server --save 60 1 --loglevel warning
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
     ports:
       - "6379:6379"
     volumes:
@@ -61,17 +65,19 @@ services:
     networks:
       - keycloak_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      #--no-auth-warning suppresses logs complaining about passwords in the command line
+      test:
+        ["CMD-SHELL", "redis-cli --no-auth-warning -a ${REDIS_PASSWORD} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 1G  # Hard limit of 1 Gigabyte
-          cpus: '2.0' # Hard limit of 2 CPU cores
+          memory: 1G
+          cpus: "2.0"
         reservations:
-          memory: 256M # Guaranteed minimum 256MB RAM
+          memory: 256M
 
 networks:
   keycloak_network:
