@@ -63,6 +63,8 @@ function HomePage() {
 
   const { updateMessage, saveChatData } = useChatData();
 
+  const [hideSideBar, setHideSideBar] = useState(true);
+
   const handleJoinRoomPopUpOpen = () => {
     setIsJoinRoomPopupOpen(true);
   };
@@ -176,65 +178,73 @@ function HomePage() {
           }
         >
           <div className="wrapper">
-            <div className="side-bar">
-              <DroppableZone id="side-bar" className="room-list">
-                <button
-                  onClick={handleJoinRoomPopUpOpen}
-                  title="Join a new room"
-                >
-                  +
-                </button>
-                <SortableContext
-                  items={rooms.map((r) => r.id.toString())}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {rooms.map((room) => (
-                    <RoomButton
-                      id={room.id.toString()}
-                      key={room.id}
-                      title={room.name}
-                      flashing={buttonFlashing.has(room.id.toString())}
-                      onClick={() => {
-                        if (selectedRooms.length === ROOMS_CAP) {
-                          //get the button id and set state
-                          setIsButtonFlashing((prev) => {
-                            const newSet = new Set(prev);
-                            newSet.add(room.id.toString());
+            <div
+              className={`side-bar ${hideSideBar ? "hidden" : ""}`}
+              onMouseEnter={() => setHideSideBar(false)}
+              onMouseLeave={() => setHideSideBar(true)}
+            >
+              {!hideSideBar && (
+                <DroppableZone id="side-bar" className="room-list">
+                  <SortableContext
+                    items={rooms.map((r) => r.id.toString())}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {rooms.map((room) => (
+                      <RoomButton
+                        id={room.id.toString()}
+                        key={room.id}
+                        title={room.name}
+                        flashing={buttonFlashing.has(room.id.toString())}
+                        onClick={() => {
+                          if (selectedRooms.length === ROOMS_CAP) {
+                            //get the button id and set state
+                            setIsButtonFlashing((prev) => {
+                              const newSet = new Set(prev);
+                              newSet.add(room.id.toString());
 
-                            //set time out to reset the button state
-                            setTimeout(() => {
-                              setIsButtonFlashing((prev) => {
-                                const buttonSetAfterDelete = new Set(prev);
-                                buttonSetAfterDelete.delete(room.id.toString());
-                                return buttonSetAfterDelete;
-                              });
-                            }, BUTTON_FLASHING_ANIMATION_TIMER);
-                            return newSet;
-                          });
-                          return;
-                        }
-                        handleRoomSelect(
-                          userData!,
-                          room,
-                          selectedRooms,
-                          setAllMessages,
-                          setSelectedRooms,
-                          setActiveRoomIndex,
-                        );
-                      }}
-                      style={{
-                        backgroundColor: selectedRooms.some(
-                          (r) => r.id === room.id,
-                        )
-                          ? "#5865F2"
-                          : undefined,
-                      }}
-                    >
-                      {"r"}
-                    </RoomButton>
-                  ))}
-                </SortableContext>
-              </DroppableZone>
+                              //set time out to reset the button state
+                              setTimeout(() => {
+                                setIsButtonFlashing((prev) => {
+                                  const buttonSetAfterDelete = new Set(prev);
+                                  buttonSetAfterDelete.delete(
+                                    room.id.toString(),
+                                  );
+                                  return buttonSetAfterDelete;
+                                });
+                              }, BUTTON_FLASHING_ANIMATION_TIMER);
+                              return newSet;
+                            });
+                            return;
+                          }
+                          handleRoomSelect(
+                            userData!,
+                            room,
+                            selectedRooms,
+                            setAllMessages,
+                            setSelectedRooms,
+                            setActiveRoomIndex,
+                          );
+                        }}
+                        style={{
+                          backgroundColor: selectedRooms.some(
+                            (r) => r.id === room.id,
+                          )
+                            ? "#5865F2"
+                            : undefined,
+                        }}
+                      >
+                        {"r"}
+                      </RoomButton>
+                    ))}
+                  </SortableContext>
+                  <button
+                    onClick={handleJoinRoomPopUpOpen}
+                    title="Join a new room"
+                  >
+                    +
+                  </button>
+                </DroppableZone>
+              )}
             </div>
             <div className="main-container">
               <div className={"multi-chat-container"}>

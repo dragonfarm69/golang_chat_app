@@ -11,6 +11,7 @@ import { useUser } from "../../Context/userContext";
 import { Virtuoso } from "react-virtuoso";
 import { handleMessageChange } from "./Hooks/useRoomMessages";
 import { MessageMap } from "./Hooks/useRooms";
+import { fa } from "@faker-js/faker";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -33,6 +34,8 @@ export function ChatArea({
   const isLoadingMore = useRef(false);
   const chatLogRef = useRef<HTMLDivElement>(null);
   const { userData } = useUser();
+
+  const [showOptions, setShowOptions] = useState<string | null>(null);
 
   useEffect(() => {
     if (chatLogRef.current) {
@@ -71,6 +74,10 @@ export function ChatArea({
     isLoadingMore.current = false;
   }, [messages, selectedRoom.id, setAllMessages]);
 
+  // const handleOptionClick = (msg: MessageResponse) => {
+  //   console.log("Option clicked for message: ", msg);
+  // };
+
   return (
     <div className="chat-area">
       <Virtuoso
@@ -82,12 +89,53 @@ export function ChatArea({
         firstItemIndex={firstItemIdex}
         //start from last index
         initialTopMostItemIndex={messages.length - 1}
+        onMouseDown={() => {
+          setShowOptions(null);
+        }}
         itemContent={(index, msg) => (
           <div
-            className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}
+            style={{ position: "relative" }}
+            onMouseLeave={() => {
+              setShowOptions(null);
+            }}
           >
-            <div className="message-user">{msg.owner_name}</div>
-            <div className="message-text">{msg.content}</div>
+            {showOptions === msg.id && (
+              <div
+                className="options-popup"
+                style={{
+                  position: "absolute",
+                  bottom: "calc(55% + 15px)",
+                  right: "1px",
+                  padding: "6px 10px",
+                  display: "flex",
+                  gap: 4,
+                  zIndex: 10,
+                }}
+              >
+                <button>Edit</button>
+                <button>Delete</button>
+                <button>Delete</button>
+                <button>Delete</button>
+                <button>Delete</button>
+                <button>Delete</button>
+              </div>
+            )}
+            <div
+              className={`chat-message ${msg.owner_name === userData?.username ? "me" : "other"}`}
+            >
+              <div className="message-content">
+                <div className="message-user">{msg.owner_name}</div>
+                <div className="message-text">{msg.content}</div>
+              </div>
+              <div
+                className="message-option-button"
+                onMouseEnter={() => {
+                  setShowOptions(msg.id);
+                }}
+              >
+                :::
+              </div>
+            </div>
           </div>
         )}
       />
