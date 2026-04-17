@@ -8,6 +8,7 @@ import { ProtectedRoute } from "./Components/protectedRoute";
 import MainAuthenticationPage from "./Pages/Authentication/Main";
 import { ChatDataProvider } from "./Context/DataContext";
 import { UserProvider } from "./Context/userContext";
+import { Profile } from "./Pages/Profile/ProfileMain";
 
 function App() {
   return (

@@ -37,8 +37,11 @@ import {
   handleMessageChange,
   handleSendMessage,
 } from "./Hooks/useRoomMessages";
+import { useNavigate } from "react-router-dom";
+import { Profile } from "../Profile/ProfileMain";
 
 function HomePage() {
+  const navigate = useNavigate();
   const { userData } = useUser();
   const isConnected = useRef(false);
   const BUTTON_FLASHING_ANIMATION_TIMER = 2000;
@@ -54,6 +57,7 @@ function HomePage() {
   }>({});
   const [newMessage, setNewMessage] = useState<{ [key: string]: string }>({});
   const [isJoinRoomPopupOpen, setIsJoinRoomPopupOpen] = useState(false);
+  const [isProfileOpen, setIsProfilePopen] = useState(false);
 
   const [selectedRooms, setSelectedRooms] = useState<RoomLitePayload[]>([]);
   const [activeRoomIndex, setActiveRoomIndex] = useState(0); // for knowing which room is in focus
@@ -69,8 +73,16 @@ function HomePage() {
     setIsJoinRoomPopupOpen(true);
   };
 
+  const handleProfilePopUpOpen = () => {
+    setIsProfilePopen(true);
+  };
+
   const handleClosePopup = () => {
     setIsJoinRoomPopupOpen(false);
+  };
+
+  const handleCloseProfilePopup = () => {
+    setIsProfilePopen(false);
   };
 
   useEffect(() => {
@@ -146,6 +158,7 @@ function HomePage() {
           }
         />
       )}
+      {isProfileOpen && <Profile onClose={handleCloseProfilePopup} />}
       <div className="app-container">
         <DndContext
           sensors={sensors}
@@ -242,6 +255,14 @@ function HomePage() {
                     title="Join a new room"
                   >
                     +
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleProfilePopUpOpen();
+                    }}
+                    title="Profile"
+                  >
+                    P
                   </button>
                 </DroppableZone>
               )}
