@@ -38,7 +38,7 @@ import {
   handleSendMessage,
 } from "./Hooks/useRoomMessages";
 import { useNavigate } from "react-router-dom";
-import { Profile } from "../Profile/ProfileMain";
+import { OptionPopUp } from "../Profile/OptionPopUp";
 
 function HomePage() {
   const navigate = useNavigate();
@@ -158,7 +158,7 @@ function HomePage() {
           }
         />
       )}
-      {isProfileOpen && <Profile onClose={handleCloseProfilePopup} />}
+      {isProfileOpen && <OptionPopUp onClose={handleCloseProfilePopup} />}
       <div className="app-container">
         <DndContext
           sensors={sensors}
