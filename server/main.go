@@ -10,6 +10,10 @@ import (
 	"strings"
 
 	"github.com/MicahParks/keyfunc/v3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -31,10 +35,11 @@ type JwkResponse struct {
 }
 
 type App struct {
-	redis_db   *redis.Client
-	db_pool    *pgxpool.Pool
-	hubManager *HubManager
-	config     *clientcredentials.Config
+	redis_db      *redis.Client
+	db_pool       *pgxpool.Pool
+	cloud_storage *s3.Client
+	hubManager    *HubManager
+	config        *clientcredentials.Config
 }
 
 func NewApp(ctx context.Context) (*App, error) {
@@ -64,11 +69,28 @@ func NewApp(ctx context.Context) (*App, error) {
 	log.Printf("Attempting to connect to database: %s", os.Getenv("REDIS_URL"))
 	client := redis.NewClient(opt)
 
+	//load cloud storage
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("minioadmin", "miniocloud", "")),
+	)
+
+	if err != nil {
+		log.Fatal("cannot load sdk config: ", err)
+	}
+
+	cloud_client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String("http://localhost:9000")
+		o.UsePathStyle = true
+	})
+	log.Println("minIO should work now")
+
 	return &App{
-		redis_db:   client,
-		db_pool:    Pool,
-		config:     Config,
-		hubManager: newHubManager(),
+		redis_db:      client,
+		db_pool:       Pool,
+		cloud_storage: cloud_client,
+		config:        Config,
+		hubManager:    newHubManager(),
 	}, nil
 }
 

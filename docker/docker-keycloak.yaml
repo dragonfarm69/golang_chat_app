@@ -79,6 +79,28 @@ services:
         reservations:
           memory: 256M
 
+  minio:
+    image: minio/minio:latest
+    # Starts the server and explicitly sets the web dashboard to port 9001
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000" # The S3 API port (This is what your Go code talks to)
+      - "9001:9001" # The Web Console port (This is what your browser talks to)
+    networks:
+      - keycloak_network
+    volumes:
+      - minio_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+        reservations:
+          memory: 256M
+
 networks:
   keycloak_network:
     driver: bridge
@@ -87,4 +109,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  minio_data:
     driver: local
