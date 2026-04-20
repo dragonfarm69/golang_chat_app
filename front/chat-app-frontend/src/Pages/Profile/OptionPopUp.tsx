@@ -3,6 +3,7 @@ import { SideBar } from "./SideBar";
 import { ProfileCard } from "./ProfileCard";
 import { Setting } from "./Setting";
 import { Bot } from "./Bot";
+import { Logout } from "./Logout";
 
 interface OptionPopUpProps {
   onClose: () => void;
@@ -25,6 +26,7 @@ export function OptionPopUp({ onClose }: OptionPopUpProps) {
           {currentOption === "profile" && <ProfileCard />}
           {currentOption === "bot" && <Bot />}
           {currentOption === "settings" && <Setting />}
+          {currentOption === "logout" && <Logout />}
         </div>
       </div>
     </div>

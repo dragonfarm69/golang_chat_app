@@ -6,6 +6,7 @@ interface ChatDataContextType {
   messages: Message[];
   saveChatData: (data: Message) => Promise<void>;
   deleteChatData: (id: string) => Promise<void>;
+  clearData: () => Promise<void>;
   updateMessage: (
     origional_message_id: string,
     new_data: Message,
@@ -70,12 +71,22 @@ export const ChatDataProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  async function clearData() {
+    try {
+      await db.messages.clear();
+      setMessages([]);
+    } catch (e) {
+      console.error("Error while trying to clear data: ", e);
+    }
+  }
+
   return (
     <chatDataContext.Provider
       value={{
         saveChatData,
         deleteChatData,
         updateMessage,
+        clearData,
         messages,
       }}
     >

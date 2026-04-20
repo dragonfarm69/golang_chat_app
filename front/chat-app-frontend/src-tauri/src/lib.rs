@@ -392,6 +392,18 @@ async fn register(data: RegisterPayload) -> Result<bool, String> {
 #[tauri::command]
 #[specta::specta]
 async fn logout() -> Result<bool, String> {
+    let client = reqwest::Client::new();
+
+    let res = client
+        .post(BACKEND_URL.to_owned() + "/api/logout")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if (res.status().is_success()) {
+        println!("User black listed")
+    }
+
     if delete_data_in_keyring("access_token".to_string()).is_ok()
         && delete_data_in_keyring("refresh_token".to_string()).is_ok()
     {

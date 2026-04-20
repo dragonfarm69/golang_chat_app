@@ -35,6 +35,7 @@ export function ProfileCard() {
 
   return (
     <>
+      <div className="profile-banner"></div>
       {/* Avatar */}
       <div className="profile-avatar-wrapper">
         {userData.avatar_url ? (

@@ -1,4 +1,6 @@
-:root {
+/* ── Dark theme (default) ────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
   --color-blue: #2F2FE4;
   --color-dark-blue: #162E93;
   --color-navy: #1A1953;
@@ -10,18 +12,50 @@
   --color-powder: #7AAACE;
   --color-sky: #9CD5FF;
   --color-off-white: #F7F8F0;
+  --color-text-primary: #F7F8F0;
+  --color-text-secondary: #a0a8bb;
+  --color-border: rgba(255, 255, 255, 0.10);
 
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
-  color: var(--color-off-white);
+  color: var(--color-text-primary);
   background-color: var(--color-bg-dark);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --color-blue: #3b4de8;
+  --color-dark-blue: #2451b5;
+  --color-navy: #dde4f5;
+  --color-bg-dark: #f0f2fa;
+  --color-bg-deep: #e4e9f5;
+  --color-purple: #a06af8;
+  --color-pink: #9b2de8;
+  --color-slate-blue: #4a78a0;
+  --color-powder: #355872;
+  --color-sky: #1e6ea0;
+  --color-off-white: #1a1a2e;
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #4a5068;
+  --color-border: rgba(0, 0, 0, 0.12);
+
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-dark);
+}
+
+/* ── Smooth theme transition ─────────────────────────────────────── */
+*, *::before, *::after {
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.15s ease;
 }
 
 html, body, #root {
@@ -1032,4 +1066,29 @@ button {
   font-family: "Courier New", monospace;
   font-size: 0.8rem;
   color: var(--color-sky);
+}
+
+.logout-container {
+  display: flex;
+  margin: auto;
+  justify-content: center;
+  max-height: 90vh;
+  gap: 10px;
+}
+
+.logout-container button {
+  padding: 0.45rem 1.1rem;
+  font-size: 2rem;
+  background-color: #00a8fc;
+}
+
+.theme-selector {
+  max-width: 200px;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--color-bg-dark);
+  color: var(--color-blue);
+  border: 1px solid var(--color-dark-blue);
+  cursor: pointer;
 }

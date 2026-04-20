@@ -8,33 +8,36 @@ import { ProtectedRoute } from "./Components/protectedRoute";
 import MainAuthenticationPage from "./Pages/Authentication/Main";
 import { ChatDataProvider } from "./Context/DataContext";
 import { UserProvider } from "./Context/userContext";
+import { ThemeProvider } from "./Context/ThemeContext";
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <UserProvider>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <ChatDataProvider>
-                    <HomePage />
-                  </ChatDataProvider>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/authentication"
-              element={<MainAuthenticationPage />}
-            />
-            <Route path="/callback" element={<CallBackPage />} />
-            <Route path="*" element={<ErrorPage />} />
-          </Routes>
-        </UserProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <UserProvider>
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <ChatDataProvider>
+                      <HomePage />
+                    </ChatDataProvider>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/authentication"
+                element={<MainAuthenticationPage />}
+              />
+              <Route path="/callback" element={<CallBackPage />} />
+              <Route path="*" element={<ErrorPage />} />
+            </Routes>
+          </UserProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
