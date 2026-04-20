@@ -12,6 +12,7 @@ interface ChatWindowProps {
   currentRegion: REGION;
   allMessages: MessageMap;
   newMessage: NewMessageMap;
+  typingUser: string[];
   onClose: () => void;
   onMessageChange: (v: string) => void;
   onSendMessage: (e: React.FormEvent) => void;
@@ -25,6 +26,7 @@ export function ChatWindow({
   selectedRooms,
   allMessages,
   newMessage,
+  typingUser,
   onClose,
   onMessageChange,
   onSendMessage,
@@ -50,6 +52,7 @@ export function ChatWindow({
       <ChatArea
         selectedRoom={{ id: room.id, name: room.name }}
         messages={allMessages[room.id] || []}
+        typingUser={typingUser}
         newMessage={newMessage[room.id] || ""}
         onMessageChange={onMessageChange}
         onSendMessage={onSendMessage}

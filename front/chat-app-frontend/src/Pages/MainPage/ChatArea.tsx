@@ -16,6 +16,7 @@ interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
   messages: MessageResponse[];
   newMessage: string;
+  typingUser: string[];
   onMessageChange: (value: string) => void;
   onSendMessage: (e: React.FormEvent) => void;
   setAllMessages: Dispatch<SetStateAction<MessageMap>>;
@@ -24,6 +25,7 @@ interface ChatAreaProps {
 export function ChatArea({
   selectedRoom,
   messages,
+  typingUser,
   newMessage,
   onMessageChange,
   onSendMessage,
@@ -215,9 +217,11 @@ export function ChatArea({
           </div>
         )}
       />
-      <div className="typing-indicator">
-        <span>User A, B ,C ,Bd is typing </span>
-      </div>
+      {typingUser && typingUser.length > 0 && (
+        <div className="typing-indicator">
+          <span>{typingUser.join(", ") + " is typing "} </span>
+        </div>
+      )}
       <form className="message-form" onSubmit={onSendMessage}>
         <input
           type="text"

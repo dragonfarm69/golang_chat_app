@@ -69,6 +69,9 @@ function HomePage() {
 
   const [hideSideBar, setHideSideBar] = useState(true);
 
+  // roomid - user
+  const [typingUser, setTypingUser] = useState<Record<string, string[]>>({});
+
   const handleJoinRoomPopUpOpen = () => {
     setIsJoinRoomPopupOpen(true);
   };
@@ -123,8 +126,33 @@ function HomePage() {
         const msg = JSON.parse(event.payload as string);
         // console.log("message: ", msg.action);
         if (msg.action === "TYPING") {
+          setTypingUser((prev) => {
+            const currentUsers = prev[msg.room_id] || [];
+            if (currentUsers.includes(msg.username)) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [msg.room_id]: [...currentUsers, msg.username],
+            };
+          });
           return;
         }
+        if (msg.action === "STOP_TYPING") {
+          setTypingUser((prev) => {
+            const currentUsers = prev[msg.room_id] || [];
+
+            return {
+              ...prev,
+              [msg.room_id]: currentUsers.filter(
+                (user) => user !== msg.username,
+              ),
+            };
+          });
+          return;
+        }
+
         const new_msg_data: Message = {
           id: msg.id,
           user_id: userData.id,
@@ -281,6 +309,7 @@ function HomePage() {
                     currentRegion={currentRegion}
                     allMessages={allMessages}
                     newMessage={newMessage}
+                    typingUser={typingUser[room.id.toString()]}
                     setAllMessages={setAllMessages}
                     onClose={() =>
                       handleCloseRoom(
@@ -316,6 +345,7 @@ function HomePage() {
                       selectedRooms={selectedRooms}
                       currentRegion={currentRegion}
                       allMessages={allMessages}
+                      typingUser={typingUser[room.id.toString()]}
                       newMessage={newMessage}
                       setAllMessages={setAllMessages}
                       onClose={() =>
