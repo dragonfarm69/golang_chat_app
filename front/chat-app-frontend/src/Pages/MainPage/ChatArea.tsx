@@ -9,9 +9,8 @@ import {
 import { commands, MessageResponse } from "../../bindings";
 import { useUser } from "../../Context/userContext";
 import { Virtuoso } from "react-virtuoso";
-import { handleMessageChange } from "./Hooks/useRoomMessages";
 import { MessageMap } from "./Hooks/useRooms";
-import { fa } from "@faker-js/faker";
+import { MessagePayload } from "../../bindings";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -35,6 +34,9 @@ export function ChatArea({
   const chatLogRef = useRef<HTMLDivElement>(null);
   const { userData } = useUser();
 
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTypingRef = useRef(false);
+
   const [showOptions, setShowOptions] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +49,80 @@ export function ChatArea({
     setFirstItemIndex(1_000_000);
     isLoadingMore.current = false;
   }, [selectedRoom.id]);
+
+  const triggerEventTyping = () => {
+    if (!userData || !userData.id) {
+      console.error("Current user data is null");
+      return;
+    }
+
+    const timestamp = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const tempId = crypto.randomUUID();
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+
+      const messagePayload: MessagePayload = {
+        id: tempId,
+        user_id: userData.id,
+        username: userData.username,
+        room_id: selectedRoom.id,
+        content: "",
+        timeStamp: timestamp,
+        action: "TYPING",
+      };
+
+      commands.sendMessage(messagePayload);
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    //create timer
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      const stopTypingMessagePayload: MessagePayload = {
+        id: tempId,
+        user_id: userData.id,
+        username: userData.username,
+        room_id: selectedRoom.id,
+        content: "",
+        timeStamp: timestamp,
+        action: "STOP_TYPING",
+      };
+      commands.sendMessage(stopTypingMessagePayload);
+    }, 2000);
+  };
+
+  const triggerEventEditing = (msgId: string) => {
+    if (!userData || !userData.id) {
+      console.error("Current user data is null");
+      return;
+    }
+
+    const timestamp = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const tempId = crypto.randomUUID();
+
+    const messagePayload: MessagePayload = {
+      id: tempId,
+      user_id: userData.id,
+      username: userData.username,
+      room_id: selectedRoom.id,
+      content: "",
+      timeStamp: timestamp,
+      action: "EDIT",
+    };
+
+    commands.sendMessage(messagePayload);
+  };
 
   const loadMore = useCallback(async () => {
     if (isLoadingMore.current || messages.length === 0) return;
@@ -139,13 +215,19 @@ export function ChatArea({
           </div>
         )}
       />
+      <div className="typing-indicator">
+        <span>User A, B ,C ,Bd is typing </span>
+      </div>
       <form className="message-form" onSubmit={onSendMessage}>
         <input
           type="text"
           className="message-input"
           placeholder={`Message #${selectedRoom.name.toLowerCase()}`}
           value={newMessage}
-          onChange={(e) => onMessageChange(e.target.value)}
+          onChange={(e) => {
+            triggerEventTyping();
+            onMessageChange(e.target.value);
+          }}
         />
         <button type="submit" className="send-button">
           Send

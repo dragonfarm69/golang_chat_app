@@ -121,6 +121,10 @@ function HomePage() {
       // Listen to WS messages
       const unlisten = listen("ws-message", (event) => {
         const msg = JSON.parse(event.payload as string);
+        // console.log("message: ", msg.action);
+        if (msg.action === "TYPING") {
+          return;
+        }
         const new_msg_data: Message = {
           id: msg.id,
           user_id: userData.id,

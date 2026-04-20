@@ -1092,3 +1092,22 @@ button {
   border: 1px solid var(--color-dark-blue);
   cursor: pointer;
 }
+
+.typing-indicator {
+  background-color: var(--color-navy);
+  color: var(--color-off-white);
+  padding: 5px;
+}
+
+.typing-indicator span::after {
+  content: '';
+  animation: typing-dots 1.5s infinite; 
+}
+
+@keyframes typing-dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}

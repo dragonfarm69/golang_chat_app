@@ -100,6 +100,42 @@ func (app *App) handleIncomingMessages(c *Client) {
 					//save to db
 
 				}
+			case "TYPING":
+				responsePayload := &ResponseMessagePayload{
+					OriginalId: msg.Id,
+					Id:         msg.Id,
+					User_ID:    msg.User_ID,
+					UserName:   msg.UserName,
+					Room_ID:    msg.Room_ID,
+					Content:    msg.Content,
+					Action:     msg.Action,
+					TimeStamp:  msg.TimeStamp,
+				}
+
+				jsonPayload, err := json.Marshal(responsePayload)
+				if err != nil {
+					log.Println("Error when marshalling payload: ", err)
+					return
+				}
+				hub.broadcaster <- jsonPayload
+			case "STOP_TYPING":
+				responsePayload := &ResponseMessagePayload{
+					OriginalId: msg.Id,
+					Id:         msg.Id,
+					User_ID:    msg.User_ID,
+					UserName:   msg.UserName,
+					Room_ID:    msg.Room_ID,
+					Content:    msg.Content,
+					Action:     msg.Action,
+					TimeStamp:  msg.TimeStamp,
+				}
+
+				jsonPayload, err := json.Marshal(responsePayload)
+				if err != nil {
+					log.Println("Error when marshalling payload: ", err)
+					return
+				}
+				hub.broadcaster <- jsonPayload
 			case "SEND":
 				//generate new Id
 				messageId := ulid.Make().String()
