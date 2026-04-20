@@ -1111,3 +1111,8 @@ button {
   75%  { content: '...'; }
   100% { content: ''; }
 }
+
+.key-style {
+  font-weight: bold;
+  color: #ff4757; 
+}

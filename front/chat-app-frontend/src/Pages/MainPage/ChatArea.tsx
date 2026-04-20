@@ -32,9 +32,11 @@ export function ChatArea({
   setAllMessages,
 }: ChatAreaProps) {
   const [firstItemIdex, setFirstItemIndex] = useState(1_000_000);
-  const isLoadingMore = useRef(false);
+  const isLoadingMore = useRef(true);
   const chatLogRef = useRef<HTMLDivElement>(null);
   const { userData } = useUser();
+
+  const [editingMessageId, setEditingMessageId] = useState<string>("");
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -49,8 +51,14 @@ export function ChatArea({
 
   useEffect(() => {
     setFirstItemIndex(1_000_000);
-    isLoadingMore.current = false;
+    isLoadingMore.current = true; // block loadMore until fresh messages arrive
   }, [selectedRoom.id]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      isLoadingMore.current = false; // messages loaded, allow loadMore on scroll
+    }
+  }, [messages]);
 
   const triggerEventTyping = () => {
     if (!userData || !userData.id) {
@@ -129,7 +137,7 @@ export function ChatArea({
   const loadMore = useCallback(async () => {
     if (isLoadingMore.current || messages.length === 0) return;
     isLoadingMore.current = true;
-    console.log("Reached old messages, fetching more .....");
+    console.log("Reached old messages, fetching more ....");
     //load more data
     const result = await commands.fetchRoomMessages(
       selectedRoom.id,
@@ -180,6 +188,7 @@ export function ChatArea({
             {showOptions === msg.id && (
               <div
                 className="options-popup"
+                onMouseDown={(e) => e.stopPropagation()}
                 style={{
                   position: "absolute",
                   bottom: "calc(55% + 15px)",
@@ -190,11 +199,14 @@ export function ChatArea({
                   zIndex: 10,
                 }}
               >
-                <button>Edit</button>
-                <button>Delete</button>
-                <button>Delete</button>
-                <button>Delete</button>
-                <button>Delete</button>
+                <button
+                  onClick={() => {
+                    setEditingMessageId(msg.id);
+                    console.log("editing: ", editingMessageId);
+                  }}
+                >
+                  Edit
+                </button>
                 <button>Delete</button>
               </div>
             )}
@@ -203,7 +215,30 @@ export function ChatArea({
             >
               <div className="message-content">
                 <div className="message-user">{msg.owner_name}</div>
-                <div className="message-text">{msg.content}</div>
+                {editingMessageId && editingMessageId === msg.id ? (
+                  <>
+                    <input
+                      type="text"
+                      value={msg.content}
+                      onChange={(e) => {}}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          setEditingMessageId("");
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          setEditingMessageId("");
+                        }
+                      }}
+                    />
+                    <span>
+                      Press <kbd className="key-style">Esc</kbd> to exit. Press{" "}
+                      <kbd className="key-style">Enter</kbd> to save.
+                    </span>
+                  </>
+                ) : (
+                  <div className="message-text">{msg.content}</div>
+                )}
               </div>
               <div
                 className="message-option-button"

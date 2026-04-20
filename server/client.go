@@ -152,7 +152,7 @@ func (app *App) handleIncomingMessages(c *Client) {
 				}
 
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				cancel()
+				defer cancel()
 
 				//change the id before saving to db
 				msg.Id = messageId

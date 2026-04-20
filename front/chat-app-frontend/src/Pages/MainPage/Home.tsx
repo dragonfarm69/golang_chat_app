@@ -108,7 +108,7 @@ function HomePage() {
           const roomList = await commands.fetchRoomsList(userData.id);
           if (roomList.status === "ok") {
             if (roomList.data != null) {
-              setRooms((prev) => [...prev, ...roomList.data]);
+              setRooms(roomList.data);
             }
           } else {
             console.error("Error fetching rooms: ", roomList.error);
