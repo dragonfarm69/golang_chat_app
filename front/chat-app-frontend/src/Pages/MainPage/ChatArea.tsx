@@ -132,7 +132,7 @@ export function ChatArea({
 
     console.log("Trigger edit event: ", messagePayload);
 
-    // commands.sendMessage(messagePayload);
+    commands.sendMessage(messagePayload);
     setEditValue(""); //reset edit value
   };
 

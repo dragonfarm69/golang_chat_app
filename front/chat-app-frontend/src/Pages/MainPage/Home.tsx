@@ -34,6 +34,7 @@ import {
 } from "./Hooks/useRooms";
 import { ChatWindow } from "./ChatWindow";
 import {
+  handleEditMessage,
   handleMessageChange,
   handleSendMessage,
 } from "./Hooks/useRoomMessages";
@@ -138,8 +139,7 @@ function HomePage() {
             };
           });
           return;
-        }
-        if (msg.action === "STOP_TYPING") {
+        } else if (msg.action === "STOP_TYPING") {
           setTypingUser((prev) => {
             const currentUsers = prev[msg.room_id] || [];
 
@@ -150,6 +150,9 @@ function HomePage() {
               ),
             };
           });
+          return;
+        } else if (msg.action === "EDIT") {
+          handleEditMessage(msg.id, msg.room_id, msg.content, setAllMessages);
           return;
         }
 

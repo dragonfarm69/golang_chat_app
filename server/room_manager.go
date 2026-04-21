@@ -228,7 +228,7 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 			msg, _ := json.Marshal(m)
 			redis_cache_interface = append(redis_cache_interface, msg)
 		}
-		app.redis_db.LPush(ctx, key, redis_cache_interface...)
+		app.redis_db.RPush(ctx, key, redis_cache_interface...)
 		//keep only 50 newest message (could be bigger but that will come later)
 		app.redis_db.LTrim(ctx, key, 0, 49)
 	}

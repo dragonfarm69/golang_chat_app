@@ -77,3 +77,22 @@ export const handleMessageChange =
   (value: string) => {
     setNewMessage((prev) => ({ ...prev, [roomId]: value }));
   };
+
+export const handleEditMessage = (
+  messageId: string,
+  roomId: string,
+  value: string,
+  setAllMessages: Dispatch<SetStateAction<MessageMap>>,
+) => {
+  setAllMessages((prev) => {
+    return {
+      ...prev,
+      [roomId]: prev[roomId].map((msg) => {
+        if (msg.id === messageId) {
+          return { ...msg, content: value };
+        }
+        return msg;
+      }),
+    };
+  });
+};

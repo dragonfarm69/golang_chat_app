@@ -53,3 +53,30 @@ func (app *App) addNewMessageToRedis(ctx context.Context, message MessagePayload
 	//Make sure to keep only 50 newest message
 	app.redis_db.LTrim(ctx, key, 0, 49)
 }
+
+func (app *App) editMessage(ctx context.Context, message MessagePayload) {
+	//clear redis cache
+	key := fmt.Sprintf("room:%s:recent_messages", message.Room_ID)
+	app.redis_db.Del(ctx, key)
+
+	//update in db
+	sql := fmt.Sprintf(`
+        UPDATE %s.messages 
+        SET content = @content, updated_at = @updated_at
+        WHERE id = @id
+        RETURNING id
+    `, pgx.Identifier{DBSchema}.Sanitize())
+
+	var id string
+	createdAt, _ := time.Parse(time.RFC3339, message.TimeStamp)
+
+	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+		"id":         message.Id,
+		"content":    message.Content,
+		"updated_at": createdAt,
+	}).Scan(&id)
+
+	if err != nil {
+		log.Println("SOMETHING IS WRONG: ", err)
+	}
+}
