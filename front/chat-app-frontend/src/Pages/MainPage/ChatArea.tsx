@@ -37,6 +37,7 @@ export function ChatArea({
   const { userData } = useUser();
 
   const [editingMessageId, setEditingMessageId] = useState<string>("");
+  const [editValue, setEditValue] = useState<string>("");
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -108,7 +109,7 @@ export function ChatArea({
     }, 2000);
   };
 
-  const triggerEventEditing = (msgId: string) => {
+  const triggerEventEditing = (msgId: string, value: string) => {
     if (!userData || !userData.id) {
       console.error("Current user data is null");
       return;
@@ -119,19 +120,20 @@ export function ChatArea({
       minute: "2-digit",
     });
 
-    const tempId = crypto.randomUUID();
-
     const messagePayload: MessagePayload = {
-      id: tempId,
+      id: msgId,
       user_id: userData.id,
       username: userData.username,
       room_id: selectedRoom.id,
-      content: "",
+      content: value,
       timeStamp: timestamp,
       action: "EDIT",
     };
 
-    commands.sendMessage(messagePayload);
+    console.log("Trigger edit event: ", messagePayload);
+
+    // commands.sendMessage(messagePayload);
+    setEditValue(""); //reset edit value
   };
 
   const loadMore = useCallback(async () => {
@@ -202,6 +204,7 @@ export function ChatArea({
                 <button
                   onClick={() => {
                     setEditingMessageId(msg.id);
+                    setEditValue(msg.content);
                     console.log("editing: ", editingMessageId);
                   }}
                 >
@@ -219,14 +222,18 @@ export function ChatArea({
                   <>
                     <input
                       type="text"
-                      value={msg.content}
-                      onChange={(e) => {}}
+                      value={editValue}
+                      onChange={(e) => {
+                        setEditValue(e.target.value);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
+                          triggerEventEditing(msg.id, editValue);
                           setEditingMessageId("");
                         } else if (e.key === "Escape") {
                           e.preventDefault();
+                          setEditValue("");
                           setEditingMessageId("");
                         }
                       }}
