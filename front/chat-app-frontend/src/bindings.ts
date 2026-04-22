@@ -119,6 +119,22 @@ async createRoom(userId: string, roomName: string) : Promise<Result<boolean, str
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async editMessage(roomId: string, messageId: string, content: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("edit_message", { roomId, messageId, content }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteMessage(roomId: string, messageId: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_message", { roomId, messageId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

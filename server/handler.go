@@ -252,3 +252,62 @@ func (app *App) HandleDisconnect(w http.ResponseWriter, r *http.Request) {
 
 	hub.disconnectClient(clientId)
 }
+
+func (app *App) HandleEditMessage(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		RoomId    string `json:"room_id"`
+		MessageId string `json:"message_id"`
+		Content   string `json:"content"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	if payload.MessageId == "" || payload.Content == "" {
+		http.Error(w, "Message id, room id and content must be not empty", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	err := app.editMessage(ctx, payload.RoomId, payload.MessageId, payload.Content)
+
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to edit message", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (app *App) HandleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		RoomId    string `json:"room_id"`
+		MessageId string `json:"message_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	if payload.MessageId == "" || payload.RoomId == "" {
+		http.Error(w, "Message id and room id must be not empty", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	err := app.deleteMessage(ctx, payload.RoomId, payload.MessageId)
+
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to delete message", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}

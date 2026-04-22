@@ -96,3 +96,16 @@ export const handleEditMessage = (
     };
   });
 };
+
+export const handleDeleteMessage = (
+  messageId: string,
+  roomId: string,
+  setAllMessages: Dispatch<SetStateAction<MessageMap>>,
+) => {
+  setAllMessages((prev) => {
+    return {
+      ...prev,
+      [roomId]: prev[roomId].filter((msg) => msg.id !== messageId),
+    };
+  });
+};

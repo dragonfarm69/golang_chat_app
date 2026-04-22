@@ -100,29 +100,6 @@ func (app *App) handleIncomingMessages(c *Client) {
 					//save to db
 
 				}
-			case "EDIT":
-				log.Println("Getting edit message: ", msg)
-				responsePayload := &ResponseMessagePayload{
-					OriginalId: msg.Id,
-					Id:         msg.Id,
-					User_ID:    msg.User_ID,
-					UserName:   msg.UserName,
-					Room_ID:    msg.Room_ID,
-					Content:    msg.Content,
-					Action:     msg.Action,
-					TimeStamp:  msg.TimeStamp,
-				}
-
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				app.editMessage(ctx, msg)
-
-				jsonPayload, err := json.Marshal(responsePayload)
-				if err != nil {
-					log.Println("Error when marshalling payload: ", err)
-					return
-				}
-				hub.broadcaster <- jsonPayload
 			case "TYPING":
 				responsePayload := &ResponseMessagePayload{
 					OriginalId: msg.Id,

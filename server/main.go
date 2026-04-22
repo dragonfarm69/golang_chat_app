@@ -219,6 +219,18 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	mux.HandleFunc("/api/message", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		//edit
+		case http.MethodPatch:
+			app.HandleEditMessage(w, r)
+		//delete
+		case http.MethodDelete:
+			app.HandleDeleteMessage(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/api/disconnect/", app.HandleDisconnect)
 	mux.HandleFunc("/api/fetch_room_message", app.HandleFetchMessages)
 	mux.HandleFunc("/api/fetch_user_info", app.HandleFetchUserInfo)

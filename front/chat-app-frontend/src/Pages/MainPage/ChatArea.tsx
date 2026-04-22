@@ -110,30 +110,12 @@ export function ChatArea({
   };
 
   const triggerEventEditing = (msgId: string, value: string) => {
-    if (!userData || !userData.id) {
-      console.error("Current user data is null");
-      return;
-    }
-
-    const timestamp = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const messagePayload: MessagePayload = {
-      id: msgId,
-      user_id: userData.id,
-      username: userData.username,
-      room_id: selectedRoom.id,
-      content: value,
-      timeStamp: timestamp,
-      action: "EDIT",
-    };
-
-    console.log("Trigger edit event: ", messagePayload);
-
-    commands.sendMessage(messagePayload);
+    commands.editMessage(selectedRoom.id, msgId, value);
     setEditValue(""); //reset edit value
+  };
+
+  const triggerEventDelete = (msgId: string) => {
+    commands.deleteMessage(selectedRoom.id, msgId);
   };
 
   const loadMore = useCallback(async () => {
@@ -205,12 +187,17 @@ export function ChatArea({
                   onClick={() => {
                     setEditingMessageId(msg.id);
                     setEditValue(msg.content);
-                    console.log("editing: ", editingMessageId);
                   }}
                 >
                   Edit
                 </button>
-                <button>Delete</button>
+                <button
+                  onClick={() => {
+                    triggerEventDelete(msg.id);
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             )}
             <div
@@ -227,8 +214,15 @@ export function ChatArea({
                         setEditValue(e.target.value);
                       }}
                       onKeyDown={(e) => {
+                        // 1. Guard against OS key-repeat (holding the key down)
+                        if (e.repeat) return;
+
+                        // 2. Guard against IME composition double-fires (e.g., UniKey / EVKey)
+                        if (e.nativeEvent.isComposing || e.keyCode === 229)
+                          return;
                         if (e.key === "Enter") {
                           e.preventDefault();
+                          e.stopPropagation();
                           triggerEventEditing(msg.id, editValue);
                           setEditingMessageId("");
                         } else if (e.key === "Escape") {

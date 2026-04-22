@@ -34,6 +34,7 @@ import {
 } from "./Hooks/useRooms";
 import { ChatWindow } from "./ChatWindow";
 import {
+  handleDeleteMessage,
   handleEditMessage,
   handleMessageChange,
   handleSendMessage,
@@ -125,7 +126,6 @@ function HomePage() {
       // Listen to WS messages
       const unlisten = listen("ws-message", (event) => {
         const msg = JSON.parse(event.payload as string);
-        // console.log("message: ", msg.action);
         if (msg.action === "TYPING") {
           setTypingUser((prev) => {
             const currentUsers = prev[msg.room_id] || [];
@@ -152,7 +152,19 @@ function HomePage() {
           });
           return;
         } else if (msg.action === "EDIT") {
-          handleEditMessage(msg.id, msg.room_id, msg.content, setAllMessages);
+          handleEditMessage(
+            msg.payload.message_id,
+            msg.room_id,
+            msg.payload.content,
+            setAllMessages,
+          );
+          return;
+        } else if (msg.action === "DELETE") {
+          handleDeleteMessage(
+            msg.payload.message_id,
+            msg.room_id,
+            setAllMessages,
+          );
           return;
         }
 

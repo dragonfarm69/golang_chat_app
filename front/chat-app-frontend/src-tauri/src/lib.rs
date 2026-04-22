@@ -184,7 +184,7 @@ async fn validate_token(
     validation.set_issuer(&["http://localhost:8081/realms/chat-app"]); // to make sure the token is from this specific endpoint
     validation.set_audience(&["account"]); //Get the client id from access token
 
-    println!("Token for validating: {}", token);
+    // println!("Token for validating: {}", token);
 
     decode::<JwkClaims>(token, &decoding_key.decoding_key, &validation)
         .map_err(|e| format!("JWT validation failed: {}", e))
@@ -701,6 +701,68 @@ async fn create_room(user_id: String, room_name: String) -> Result<bool, String>
     }
 }
 
+#[tauri::command]
+#[specta::specta]
+async fn edit_message(
+    room_id: String,
+    message_id: String,
+    content: String,
+) -> Result<bool, String> {
+    let client = reqwest::Client::new();
+    let access_token = get_data_from_keyring("access_token".to_string())?;
+
+    let url = format!("{}/api/message", BACKEND_URL);
+
+    let res = client
+        .patch(&url)
+        .bearer_auth(&access_token)
+        .json(
+            &serde_json::json!({"room_id": room_id, "message_id": message_id, "content": content}),
+        )
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if res.status().is_success() {
+        Ok(true)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        println!("{}", error_body);
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn delete_message(room_id: String, message_id: String) -> Result<bool, String> {
+    let client = reqwest::Client::new();
+    let access_token = get_data_from_keyring("access_token".to_string())?;
+
+    let url = format!("{}/api/message", BACKEND_URL);
+
+    let res = client
+        .delete(&url)
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({"room_id": room_id, "message_id": message_id}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if res.status().is_success() {
+        Ok(true)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        println!("{}", error_body);
+        Ok(false)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -731,7 +793,9 @@ pub fn run() {
         register,
         checkLoginStatus,
         join_room,
-        create_room
+        create_room,
+        edit_message,
+        delete_message,
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
