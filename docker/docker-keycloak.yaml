@@ -101,6 +101,53 @@ services:
         reservations:
           memory: 256M
 
+  imgproxy:
+    image: darthsim/imgproxy:latest
+    environment:
+      # Tell Imgproxy it is allowed to fetch files from S3/MinIO
+      - IMGPROXY_USE_S3=true
+      # Point it to your internal MinIO container (using the Docker network)
+      - IMGPROXY_S3_ENDPOINT=http://minio:9000
+      # Use the same credentials as your MinIO root user
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
+      # MinIO defaults to us-east-1 unless configured otherwise
+      - AWS_REGION=us-east-1
+      # Useful for development: Disable URL signature checking (TURN ON IN PRODUCTION)
+      - IMGPROXY_DEVELOPMENT_ERRORS_MODE=true
+    networks:
+      - keycloak_network
+    depends_on:
+      - minio
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+        reservations:
+          memory: 256M
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8082:80"
+    volumes:
+      # Mounts the config file from your host machine to the container
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Volume to store the cached images permanently
+      - nginx_image_cache:/var/cache/nginx
+    networks:
+      - keycloak_network
+    depends_on:
+      - imgproxy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+
 networks:
   keycloak_network:
     driver: bridge
@@ -111,4 +158,6 @@ volumes:
   redis_data:
     driver: local
   minio_data:
+    driver: local
+  nginx_image_cache:
     driver: local
