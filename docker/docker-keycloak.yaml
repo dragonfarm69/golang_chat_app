@@ -148,6 +148,20 @@ services:
         reservations:
           memory: 128M
 
+  go_backend:
+    image: server:latest
+    # Tell Docker to inject your physical .env file into the container at runtime
+    env_file:
+      - .env
+    networks:
+      - keycloak_network
+    # Make sure the database and auth server are running before Go boots up
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
 networks:
   keycloak_network:
     driver: bridge
