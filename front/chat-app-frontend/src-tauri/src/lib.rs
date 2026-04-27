@@ -263,7 +263,7 @@ async fn fetch_account_info() -> Result<UserInfo, String> {
 
     let res = client
         .get("http://localhost:8081/realms/chat-app/protocol/openid-connect/userinfo")
-        .bearer_auth(access_token)
+        .bearer_auth(&access_token)
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -279,11 +279,13 @@ async fn fetch_account_info() -> Result<UserInfo, String> {
             .ok_or("username not found in Keycloak response")?;
 
         //fetch the info from the db
-        let url = format!(
-            "http://{}/api/fetch_user_info?username={}",
-            BACKEND_URL, username
-        );
-        let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+        let url = format!("{}/api/user?username={}", BACKEND_URL, username);
+        let res = client
+            .get(&url)
+            .bearer_auth(&access_token)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
 
         let user_info_db = res.text().await.map_err(|e| e.to_string())?;
 
