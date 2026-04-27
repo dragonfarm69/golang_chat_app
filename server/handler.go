@@ -123,6 +123,7 @@ func (app *App) HandleFetchMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) HandleFetchUserInfo(w http.ResponseWriter, r *http.Request) {
+	// log.Println("hello")
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -310,4 +311,12 @@ func (app *App) HandleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (app *App) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func (app *App) HandleEditUser(w http.ResponseWriter, r *http.Request) {
+
 }

@@ -136,6 +136,8 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       # Volume to store the cached images permanently
       - nginx_image_cache:/var/cache/nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - keycloak_network
     depends_on:
@@ -147,20 +149,6 @@ services:
           cpus: "1.0"
         reservations:
           memory: 128M
-
-  go_backend:
-    image: server:latest
-    # Tell Docker to inject your physical .env file into the container at runtime
-    env_file:
-      - .env
-    networks:
-      - keycloak_network
-    # Make sure the database and auth server are running before Go boots up
-    depends_on:
-      postgres:
-        condition: service_healthy
-      keycloak:
-        condition: service_started
 
 networks:
   keycloak_network:

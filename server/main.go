@@ -179,7 +179,8 @@ func (app *App) TokenValidation(next http.Handler) http.Handler {
 
 func main() {
 	flag.Parse()
-	mux := http.NewServeMux()
+	mainMux := http.NewServeMux()
+	protectedMux := http.NewServeMux()
 	fetchPublicToken()
 
 	ctx := context.Background()
@@ -190,7 +191,7 @@ func main() {
 	defer app.db_pool.Close()
 	defer app.redis_db.Close()
 
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	mainMux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		// hubId := r.URL.Query().Get("hub")
 		user_id := r.URL.Query().Get("user_id")
 		println("client id: ", user_id)
@@ -201,15 +202,16 @@ func main() {
 
 		app.serveWs(app.hubManager, w, r, user_id)
 	})
-	mux.HandleFunc("/logout", app.HandleLogOut)
-	mux.HandleFunc("/register", app.HandleRegister)
-	mux.HandleFunc("/refreshToken", app.HandleRefreshToken)
-	mux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
+	mainMux.HandleFunc("/auth/logout", app.HandleLogOut)
+	mainMux.HandleFunc("/auth/register", app.HandleRegister)
+	mainMux.HandleFunc("/auth/refresh_token", app.HandleRefreshToken)
+
+	protectedMux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		//get room list
 		case http.MethodGet:
 			app.HandleListRoom(w, r)
-		//create room
+			//create room
 		case http.MethodPost:
 			app.HandleCreateRoom(w, r)
 		//delete room
@@ -219,7 +221,7 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	mux.HandleFunc("/api/message", func(w http.ResponseWriter, r *http.Request) {
+	protectedMux.HandleFunc("/api/message", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		//edit
 		case http.MethodPatch:
@@ -231,21 +233,35 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	mux.HandleFunc("/api/disconnect/", app.HandleDisconnect)
-	mux.HandleFunc("/api/fetch_room_message", app.HandleFetchMessages)
-	mux.HandleFunc("/api/fetch_user_info", app.HandleFetchUserInfo)
-	mux.HandleFunc("/api/join", app.HandleJoinRoom)
+	protectedMux.HandleFunc("/api/user", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			app.HandleFetchUserInfo(w, r)
+		//edit
+		case http.MethodPatch:
+			app.HandleEditUser(w, r)
+		//delete
+		case http.MethodDelete:
+			app.HandleDeleteUser(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	protectedMux.HandleFunc("/api/disconnect/", app.HandleDisconnect)
+	protectedMux.HandleFunc("/api/fetch_room_message", app.HandleFetchMessages)
+	protectedMux.HandleFunc("/api/fetch_user_info", app.HandleFetchUserInfo)
+	protectedMux.HandleFunc("/api/join", app.HandleJoinRoom)
 
 	//middleware
-	mux.Handle("/api", http.StripPrefix("/api", app.TokenValidation(mux)))
+	mainMux.Handle("/api/", app.TokenValidation(protectedMux))
 
 	//Configure CORS
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"}, // Allow all origins
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"*"},
 	})
-	handler := c.Handler(mux)
+	handler := c.Handler(mainMux)
 
 	err = http.ListenAndServe(*addr, handler)
 	if err != nil {

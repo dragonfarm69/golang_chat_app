@@ -3,11 +3,7 @@ fn main() {
     if let Err(e) = dotenvy::dotenv() {
         println!("cargo:warning=Failed to load .env file: {}", e);
     }
-    
-    // Read the environment variables and pass them to rustc
-    if let Ok(val) = std::env::var("BACKEND_REGISTER_URL") {
-        println!("cargo:rustc-env=BACKEND_REGISTER_URL={}", val);
-    }
+
     if let Ok(val) = std::env::var("REDIRECT_URL") {
         println!("cargo:rustc-env=REDIRECT_URL={}", val);
     }
@@ -23,10 +19,7 @@ fn main() {
     if let Ok(val) = std::env::var("CLIENT_SECRET") {
         println!("cargo:rustc-env=CLIENT_SECRET={}", val);
     }
-    if let Ok(val) = std::env::var("BACKEND_REFRESH_TOKEN") {
-        println!("cargo:rustc-env=BACKEND_REFRESH_TOKEN={}", val);
-    }
-    
+
     // Rerun if these change
     // println!("cargo:rerun-if-env-changed=BACKEND_REGISTER_URL");
     // println!("cargo:rerun-if-env-changed=REDIRECT_URL");

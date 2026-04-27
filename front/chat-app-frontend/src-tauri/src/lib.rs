@@ -52,13 +52,11 @@ struct AppState {
     pub stop_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
 }
 
-const BACKEND_REGISTER_URL: &str = env!("BACKEND_REGISTER_URL");
 const REDIRECT_URL: &str = env!("REDIRECT_URL");
 const TOKEN_URL: &str = env!("TOKEN_URL");
 const CLIENT_ID: &str = env!("CLIENT_ID");
 const CLIENT_SECRET: &str = env!("CLIENT_SECRET");
 const BACKEND_URL: &str = std::env!("BACKEND_URL");
-const BACKEND_REFRESH_TOKEN_URL: &str = std::env!("BACKEND_REFRESH_TOKEN");
 
 #[tauri::command]
 #[specta::specta]
@@ -196,9 +194,10 @@ async fn refresh_token() -> Result<TokenResponse, String> {
     let client = reqwest::Client::new();
 
     let refresh_token = get_data_from_keyring("refresh_token".to_string())?;
+    let url = format!("{}/auth/refresh_token", BACKEND_URL);
 
     let res = client
-        .post(BACKEND_REFRESH_TOKEN_URL)
+        .post(url)
         .json(&serde_json::json!({ "refresh_token": &refresh_token }))
         .send()
         .await
@@ -260,6 +259,7 @@ async fn fetch_token(code: String, verifier: String) -> Result<String, String> {
 async fn fetch_account_info() -> Result<UserInfo, String> {
     let access_token = get_data_from_keyring("access_token".to_string())?;
     let client = reqwest::Client::new();
+    let url = format!("{}/refresh_token", BACKEND_URL);
 
     let res = client
         .get("http://localhost:8081/realms/chat-app/protocol/openid-connect/userinfo")
@@ -280,14 +280,15 @@ async fn fetch_account_info() -> Result<UserInfo, String> {
 
         //fetch the info from the db
         let url = format!(
-            "http://localhost:8080/api/fetch_user_info?username={}",
-            username
+            "http://{}/api/fetch_user_info?username={}",
+            BACKEND_URL, username
         );
         let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
 
         let user_info_db = res.text().await.map_err(|e| e.to_string())?;
 
         let user_info: UserInfo = serde_json::from_str(&user_info_db).map_err(|e| e.to_string())?;
+        println!("User info: {}", user_info_db);
 
         return Ok(user_info);
     } else {
@@ -377,7 +378,7 @@ async fn register(data: RegisterPayload) -> Result<bool, String> {
     let client = reqwest::Client::new();
 
     let res = client
-        .post(BACKEND_REGISTER_URL)
+        .post(BACKEND_URL.to_string() + "/auth/register")
         .json(&serde_json::json!(data))
         .send()
         .await
@@ -395,7 +396,7 @@ async fn logout() -> Result<bool, String> {
     let client = reqwest::Client::new();
 
     let res = client
-        .post(BACKEND_URL.to_owned() + "/api/logout")
+        .post(BACKEND_URL.to_owned() + "/auth/logout")
         .send()
         .await
         .map_err(|e| e.to_string())?;
