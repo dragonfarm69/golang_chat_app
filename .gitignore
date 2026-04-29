@@ -1,3 +1,4 @@
 .env
 /docker/docker/*
 node_modules/
+drake.webp

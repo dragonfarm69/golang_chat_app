@@ -11,6 +11,8 @@ import { useUser } from "../../Context/userContext";
 import { Virtuoso } from "react-virtuoso";
 import { MessageMap } from "./Hooks/useRooms";
 import { MessagePayload } from "../../bindings";
+import drakeImage from "./drake.webp";
+import { ImageCard } from "../../Components/CustomImageComponent";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -253,6 +255,22 @@ export function ChatArea({
           </div>
         )}
       />
+      <div className="image-preview-sidebar">
+        <button>Hide all</button>
+        <button>X</button>
+      </div>
+      <ul className="image-preview">
+        <li>
+          <ImageCard image={drakeImage} />
+        </li>
+        <li>
+          <ImageCard image={drakeImage} />
+        </li>
+        <li>
+          <ImageCard image={drakeImage} />
+        </li>
+        <li></li>
+      </ul>
       {typingUser && typingUser.length > 0 && (
         <div className="typing-indicator">
           <span>{typingUser.join(", ") + " is typing "} </span>
