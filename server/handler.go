@@ -313,6 +313,10 @@ func (app *App) HandleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (app *App) HandleUploadImage(w http.ResponseWriter, r *http.Request) {
+
+}
+
 func (app *App) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 
 }

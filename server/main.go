@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"log"
@@ -35,11 +36,12 @@ type JwkResponse struct {
 }
 
 type App struct {
-	redis_db      *redis.Client
-	db_pool       *pgxpool.Pool
-	cloud_storage *s3.Client
-	hubManager    *HubManager
-	config        *clientcredentials.Config
+	redis_db            *redis.Client
+	db_pool             *pgxpool.Pool
+	s3_client           *s3.Client
+	s3_presigned_client *s3.PresignClient
+	hubManager          *HubManager
+	config              *clientcredentials.Config
 }
 
 func NewApp(ctx context.Context) (*App, error) {
@@ -79,18 +81,22 @@ func NewApp(ctx context.Context) (*App, error) {
 		log.Fatal("cannot load sdk config: ", err)
 	}
 
-	cloud_client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	s3_client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String("http://localhost:9000")
 		o.UsePathStyle = true
 	})
+
+	presignedClient := s3.NewPresignClient(s3_client)
+
 	log.Println("minIO should work now")
 
 	return &App{
-		redis_db:      client,
-		db_pool:       Pool,
-		cloud_storage: cloud_client,
-		config:        Config,
-		hubManager:    newHubManager(),
+		redis_db:            client,
+		db_pool:             Pool,
+		s3_client:           s3_client,
+		s3_presigned_client: presignedClient,
+		config:              Config,
+		hubManager:          newHubManager(),
 	}, nil
 }
 
@@ -247,9 +253,77 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+	protectedMux.HandleFunc("/api/image", func(w http.ResponseWriter, r *http.Request) {
+
+		switch r.Method {
+		case http.MethodPost:
+			var payload struct {
+				File_name   string `json:"file_name"`
+				File_size   string `json:"file_size"`
+				Upload_date string `json:"upload_date"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid json body", http.StatusBadRequest)
+				return
+			}
+
+			log.Println("File name: ", payload.File_name)
+			val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
+			if err != nil {
+				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
+			}
+			log.Println(val)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+		case http.MethodDelete:
+			var payload struct {
+				File_name   string `json:"file_name"`
+				File_size   string `json:"file_size"`
+				Upload_date string `json:"upload_date"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid json body", http.StatusBadRequest)
+				return
+			}
+
+			log.Println("File name: ", payload.File_name)
+			val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
+			if err != nil {
+				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
+			}
+			log.Println(val)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			app.generateDeletePresignURL(r.Context(), payload.File_name, payload.File_size)
+		case http.MethodPut:
+			var payload struct {
+				File_name   string `json:"file_name"`
+				File_size   string `json:"file_size"`
+				Upload_date string `json:"upload_date"`
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, "invalid json body", http.StatusBadRequest)
+				return
+			}
+
+			log.Println("File name: ", payload.File_name)
+			val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
+			if err != nil {
+				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
+			}
+			log.Println(val)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			app.generatePutPresignedURL(r.Context(), payload.File_name, payload.File_size)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	protectedMux.HandleFunc("/api/disconnect/", app.HandleDisconnect)
 	protectedMux.HandleFunc("/api/fetch_room_message", app.HandleFetchMessages)
-	protectedMux.HandleFunc("/api/fetch_user_info", app.HandleFetchUserInfo)
 	protectedMux.HandleFunc("/api/join", app.HandleJoinRoom)
 
 	//middleware

@@ -141,6 +141,7 @@ services:
     networks:
       - keycloak_network
     depends_on:
+      - keycloak
       - imgproxy
     deploy:
       resources:
