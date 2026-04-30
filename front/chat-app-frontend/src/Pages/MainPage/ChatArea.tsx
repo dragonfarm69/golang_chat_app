@@ -13,6 +13,8 @@ import { MessageMap } from "./Hooks/useRooms";
 import { MessagePayload } from "../../bindings";
 import drakeImage from "./drake.webp";
 import { ImageCard } from "../../Components/CustomImageComponent";
+import { open } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -45,6 +47,7 @@ export function ChatArea({
   const isTypingRef = useRef(false);
 
   const [showOptions, setShowOptions] = useState<string | null>(null);
+  const [files, setFiles] = useState<string[]>([]);
 
   useEffect(() => {
     if (chatLogRef.current) {
@@ -146,9 +149,13 @@ export function ChatArea({
     isLoadingMore.current = false;
   }, [messages, selectedRoom.id, setAllMessages]);
 
-  // const handleOptionClick = (msg: MessageResponse) => {
-  //   console.log("Option clicked for message: ", msg);
-  // };
+  const handleRemoveMedia = (fileUrl: string) => {
+    setFiles((prev) => prev.filter((file) => file !== fileUrl));
+  };
+
+  const handleRemoveAll = () => {
+    setFiles([]);
+  };
 
   return (
     <div className="chat-area">
@@ -255,22 +262,21 @@ export function ChatArea({
           </div>
         )}
       />
-      <div className="image-preview-sidebar">
-        <button>Hide all</button>
-        <button>X</button>
-      </div>
-      <ul className="image-preview">
-        <li>
-          <ImageCard image={drakeImage} />
-        </li>
-        <li>
-          <ImageCard image={drakeImage} />
-        </li>
-        <li>
-          <ImageCard image={drakeImage} />
-        </li>
-        <li></li>
-      </ul>
+      {files.length >= 1 && (
+        <div className="media-preview-box">
+          <div className="media-preview-ultilities">
+            <button>Hide all</button>
+            <button onClick={handleRemoveAll}>X</button>
+          </div>
+          <ul className="media-preview-content">
+            {files.map((file) => (
+              <li>
+                <ImageCard image={file} handleRemove={handleRemoveMedia} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {typingUser && typingUser.length > 0 && (
         <div className="typing-indicator">
           <span>{typingUser.join(", ") + " is typing "} </span>
@@ -290,7 +296,29 @@ export function ChatArea({
         <button type="submit" className="send-button">
           Send
         </button>
-        <button type="button" className="send-button">
+        <button
+          type="button"
+          className="send-button"
+          onClick={async () => {
+            const file = await open({
+              multiple: false,
+              directory: false,
+              filters: [{ name: "Images", extensions: ["png", "jpg", "webp"] }],
+            });
+
+            if (file) {
+              try {
+                const assetUrl = convertFileSrc(file);
+                console.log(typeof assetUrl);
+                console.log("Assert: ", assetUrl);
+                setFiles((prev) => [...prev, assetUrl]);
+              } catch (error) {
+                console.error("error when fetching file: ", error);
+              }
+            }
+            console.log("FILE: ", file);
+          }}
+        >
           📎
         </button>
         <button type="button" className="send-button">

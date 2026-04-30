@@ -1117,7 +1117,7 @@ button {
   color: #ff4757; 
 }
 
-.image-preview {
+.media-preview-content {
   flex-shrink: 0;
   display: flex;
   list-style: none;
@@ -1132,25 +1132,25 @@ button {
   -ms-overflow-style: none;
 }
 
-.image-preview::-webkit-scrollbar {
+.media-preview-content::-webkit-scrollbar {
   height: 8px;
 }
 
-.image-preview::-webkit-scrollbar-track {
+.media-preview-content::-webkit-scrollbar-track {
   background: #1e1f22;
   border-radius: 4px;
 }
 
-.image-preview::-webkit-scrollbar-thumb {
+.media-preview-content::-webkit-scrollbar-thumb {
   background: #5865F2;
   border-radius: 4px;
 }
 
-.image-preview::-webkit-scrollbar-thumb:hover {
+.media-preview-content::-webkit-scrollbar-thumb:hover {
   background: #4752C4;
 }
 
-.image-preview img {
+.media-preview-content img {
   max-width: 200px;
   max-height: 200px;
 
@@ -1187,7 +1187,7 @@ button {
   color: white;
 }
 
-.image-preview-sidebar {
+.media-preview-ultilities {
   display: flex;
   flex-direction: row;
   justify-content: end;
