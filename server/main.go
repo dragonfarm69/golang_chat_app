@@ -325,17 +325,15 @@ func main() {
 			}
 
 			var urls []string
+			var upload_type string = "chat-media"
 			for _, val := range payload.Files {
-				var upload_type string
 				var content_type string
 
 				switch val.FileType {
 				case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
-					upload_type = "chat-image"
 					content_type = "image"
 
 				case "video/mp4", "video/webm", "video/quicktime":
-					upload_type = "chat-video"
 					content_type = "video"
 
 				default:

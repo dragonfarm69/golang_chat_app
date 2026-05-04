@@ -258,7 +258,7 @@ export function ChatArea({
                   <div className="message-text">{msg.content}</div>
                 ) : (
                   <img
-                    src={`${mediaBaseURL}/media/insecure/rs:auto:800:0/plain/s3://chat-image/${msg.content}`}
+                    src={`${mediaBaseURL}/media/insecure/rs:auto:800:0/plain/s3://chat-media/${msg.content}`}
                     alt="media"
                   />
                 )}
