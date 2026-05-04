@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -31,11 +30,12 @@ type Room struct {
 }
 
 type RoomMessage struct {
-	Id         string `json:"id"`
-	Owner_name string `json:"owner_name"`
-	Room_ID    string `json:"room_id"`
-	Content    string `json:"content"`
-	TimeStamp  string `json:"timeStamp"`
+	Id           string `json:"id"`
+	Owner_name   string `json:"owner_name"`
+	Room_ID      string `json:"room_id"`
+	Content      string `json:"content"`
+	Message_Type string `json:"message_type"`
+	TimeStamp    string `json:"timeStamp"`
 }
 
 const charset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -146,22 +146,22 @@ func (app *App) fetchRoomsBasedOnUserId(ctx context.Context, user_id string) ([]
 func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id string) ([]RoomMessage, error) {
 	log.Println("FETCHING MESSAGE WITH OFFSET: ", offset_id)
 	//check in redis first
-	key := fmt.Sprintf("room:%s:recent_messages", room_id)
-	redis_data, err := app.redis_db.LRange(ctx, key, 0, 49).Result()
+	// key := fmt.Sprintf("room:%s:recent_messages", room_id)
+	// redis_data, err := app.redis_db.LRange(ctx, key, 0, 49).Result()
 
-	if offset_id == "" && err == nil && len(redis_data) > 0 {
-		log.Println("Getting data from redis for room: ", room_id)
-		var messages []RoomMessage
-		for _, item := range redis_data {
-			var m RoomMessage
-			if err := json.Unmarshal([]byte(item), &m); err == nil {
-				messages = append(messages, m)
-			} else {
-				log.Println("Failed to unmarshal cached data")
-			}
-		}
-		return messages, nil
-	}
+	// if offset_id == "" && err == nil && len(redis_data) > 0 {
+	// 	log.Println("Getting data from redis for room: ", room_id)
+	// 	var messages []RoomMessage
+	// 	for _, item := range redis_data {
+	// 		var m RoomMessage
+	// 		if err := json.Unmarshal([]byte(item), &m); err == nil {
+	// 			messages = append(messages, m)
+	// 		} else {
+	// 			log.Println("Failed to unmarshal cached data")
+	// 		}
+	// 	}
+	// 	return messages, nil
+	// }
 
 	messagesTable := pgx.Identifier{DBSchema, "messages"}.Sanitize()
 	usersTable := pgx.Identifier{DBSchema, "users"}.Sanitize()
@@ -169,7 +169,7 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 	var args []interface{}
 	if offset_id == "" {
 		sql = fmt.Sprintf(`
-            SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at
+            SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at, m.message_type
             FROM %s m
             LEFT JOIN %s u ON m.user_id = u.id
             WHERE m.room_id = $1
@@ -179,7 +179,7 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 		args = []interface{}{room_id}
 	} else {
 		sql = fmt.Sprintf(`
-            SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at
+            SELECT m.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at, m.message_type
             FROM %s m
             LEFT JOIN %s u ON m.user_id = u.id
             WHERE m.room_id = $1 AND m.id < $2
@@ -206,6 +206,7 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 			&m.Room_ID,
 			&m.Content,
 			&createdAt,
+			&m.Message_Type,
 		); err != nil {
 			return nil, fmt.Errorf("Failed to get room message: %w", err)
 		}
@@ -219,19 +220,19 @@ func (app *App) fetchRoomMessage(ctx context.Context, room_id string, offset_id 
 
 	log.Println("MESSAGES: ", messages)
 
-	//only cache if offset_id == "" -> need newest message
-	if offset_id == "" && len(messages) > 0 {
-		app.redis_db.Del(ctx, key)
+	// //only cache if offset_id == "" -> need newest message
+	// if offset_id == "" && len(messages) > 0 {
+	// 	app.redis_db.Del(ctx, key)
 
-		var redis_cache_interface []interface{}
-		for _, m := range messages {
-			msg, _ := json.Marshal(m)
-			redis_cache_interface = append(redis_cache_interface, msg)
-		}
-		app.redis_db.RPush(ctx, key, redis_cache_interface...)
-		//keep only 50 newest message (could be bigger but that will come later)
-		app.redis_db.LTrim(ctx, key, 0, 49)
-	}
+	// 	var redis_cache_interface []interface{}
+	// 	for _, m := range messages {
+	// 		msg, _ := json.Marshal(m)
+	// 		redis_cache_interface = append(redis_cache_interface, msg)
+	// 	}
+	// 	app.redis_db.RPush(ctx, key, redis_cache_interface...)
+	// 	//keep only 50 newest message (could be bigger but that will come later)
+	// 	app.redis_db.LTrim(ctx, key, 0, 49)
+	// }
 
 	return messages, nil
 }

@@ -166,7 +166,7 @@ async uploadFile(url: string, fileUrl: string) : Promise<Result<boolean, string>
 
 export type FileMetaData = { file_size: string; file_name: string; file_type: string }
 export type MessagePayload = { id: string; user_id: string; room_id: string; content: string; username: string; timeStamp: string; action: string }
-export type MessageResponse = { id: string; owner_name: string; room_id: string; content: string; timeStamp: string }
+export type MessageResponse = { id: string; owner_name: string; room_id: string; content: string; timeStamp: string; message_type: string }
 export type RegisterPayload = { email: string; first_name: string; last_name: string; password: string }
 export type RoomLitePayload = { id: string; name: string; description: string; created_at: string; updated_at: string }
 export type UserInfo = { id: string; avatar_url: string | null; email: string; username: string; status: string; created_at: string; updated_at: string | null }

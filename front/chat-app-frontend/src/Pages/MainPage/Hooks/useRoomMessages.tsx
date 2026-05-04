@@ -48,6 +48,7 @@ export const handleSendMessage =
       room_id: roomId,
       content: messageText,
       timeStamp: timestamp,
+      message_type: "text",
     };
 
     setAllMessages((prevMessages) => ({

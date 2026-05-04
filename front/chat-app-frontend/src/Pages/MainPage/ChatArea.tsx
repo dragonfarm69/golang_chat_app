@@ -12,7 +12,7 @@ import { Virtuoso } from "react-virtuoso";
 import { MessageMap } from "./Hooks/useRooms";
 import { MessagePayload } from "../../bindings";
 import { ImageCard } from "../../Components/CustomImageComponent";
-import { open } from "@tauri-apps/plugin-dialog";
+import { message, open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { stat } from "@tauri-apps/plugin-fs";
 import { FileMetaData } from "../../bindings";
@@ -36,6 +36,7 @@ export function ChatArea({
   onSendMessage,
   setAllMessages,
 }: ChatAreaProps) {
+  const mediaBaseURL = "http://localhost:8082";
   const [firstItemIdex, setFirstItemIndex] = useState(1_000_000);
   const isLoadingMore = useRef(true);
   const chatLogRef = useRef<HTMLDivElement>(null);
@@ -253,8 +254,13 @@ export function ChatArea({
                       <kbd className="key-style">Enter</kbd> to save.
                     </span>
                   </>
-                ) : (
+                ) : msg.message_type === "text" ? (
                   <div className="message-text">{msg.content}</div>
+                ) : (
+                  <img
+                    src={`${mediaBaseURL}/media/insecure/rs:auto:800:0/plain/s3://chat-image/${msg.content}`}
+                    alt="media"
+                  />
                 )}
               </div>
               <div

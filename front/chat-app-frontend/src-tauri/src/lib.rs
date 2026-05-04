@@ -106,6 +106,7 @@ pub struct MessageResponse {
     pub room_id: String,
     pub content: String,
     pub timeStamp: String,
+    pub message_type: String,
 }
 
 #[derive(Serialize, Deserialize, Type)]
