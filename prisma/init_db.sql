@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS messages (
     room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- removed NOT NULL
     content TEXT NOT NULL,
-    message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'file', 'system')),
+    message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'video', 'file', 'system')),
     state message_state DEFAULT 'PENDING',
     parent_id VARCHAR(26) REFERENCES messages(id) ON DELETE SET NULL, -- for thread/reply support
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

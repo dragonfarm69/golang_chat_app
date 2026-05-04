@@ -154,18 +154,19 @@ func (app *App) deleteMessage(ctx context.Context, room_id string, message_id st
 	return nil
 }
 
-func (app *App) addNewPendingMediaMessage(ctx context.Context, message_id string, user_id string, room_id string, key string) (string, error) {
+func (app *App) addNewPendingMediaMessage(ctx context.Context, message_id string, message_type string, user_id string, room_id string, key string) (string, error) {
 	sql := fmt.Sprintf(`
-        INSERT INTO %s.messages (id, content, user_id, room_id)
-        VALUES (@id, @content, @user_id, @room_id)
+        INSERT INTO %s.messages (id, content, message_type, user_id, room_id)
+        VALUES (@id, @content, @message_type, @user_id, @room_id)
         RETURNING id
     `, pgx.Identifier{DBSchema}.Sanitize())
 
 	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
-		"id":      message_id,
-		"content": key,
-		"room_id": room_id,
-		"user_id": user_id,
+		"id":           message_id,
+		"content":      key,
+		"room_id":      room_id,
+		"user_id":      user_id,
+		"message_type": message_type,
 	}).Scan(&message_id)
 
 	if err != nil {

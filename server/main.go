@@ -327,17 +327,19 @@ func main() {
 			var urls []string
 			for _, val := range payload.Files {
 				var upload_type string
-				content_type := val.FileType
+				var content_type string
 
-				switch content_type {
+				switch val.FileType {
 				case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
 					upload_type = "chat-image"
+					content_type = "image"
 
 				case "video/mp4", "video/webm", "video/quicktime":
 					upload_type = "chat-video"
+					content_type = "video"
 
 				default:
-					errMsg := fmt.Sprintf("Unsupported file type: %s", content_type)
+					errMsg := fmt.Sprintf("Unsupported file type: %s", val.FileType)
 					http.Error(w, errMsg, http.StatusBadRequest)
 					return
 				}
@@ -345,8 +347,7 @@ func main() {
 				id := ulid.Make().String()
 				uniqueKey := fmt.Sprintf("%s/%s/%s", payload.Room_ID, id, val.FileName)
 				log.Println("Image unique key: ", uniqueKey)
-
-				_, err := app.addNewPendingMediaMessage(ctx, id, payload.User_ID, payload.Room_ID, uniqueKey)
+				_, err := app.addNewPendingMediaMessage(ctx, id, content_type, payload.User_ID, payload.Room_ID, uniqueKey)
 				if err != nil {
 					log.Println("Error when trying to add new pending message: ", err)
 					continue
