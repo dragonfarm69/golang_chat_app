@@ -89,6 +89,8 @@ services:
     ports:
       - "9000:9000" # The S3 API port (This is what your Go code talks to)
       - "9001:9001" # The Web Console port (This is what your browser talks to)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - keycloak_network
     volumes:

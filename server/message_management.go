@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/oklog/ulid/v2"
 )
 
 type WsEvent struct {
@@ -151,4 +152,49 @@ func (app *App) deleteMessage(ctx context.Context, room_id string, message_id st
 	hub.broadcaster <- jsonPayload
 
 	return nil
+}
+
+func (app *App) addNewPendingMediaMessage(ctx context.Context, message_id string, user_id string, room_id string, key string) (string, error) {
+	sql := fmt.Sprintf(`
+        INSERT INTO %s.messages (id, content, user_id, room_id)
+        VALUES (@id, @content, @user_id, @room_id)
+        RETURNING id
+    `, pgx.Identifier{DBSchema}.Sanitize())
+
+	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+		"id":      message_id,
+		"content": key,
+		"room_id": room_id,
+		"user_id": user_id,
+	}).Scan(&message_id)
+
+	if err != nil {
+		log.Println("SOMETHING IS WRONG: ", err)
+		return "", fmt.Errorf("something is wrong: %v", err)
+	}
+
+	return fmt.Sprintf("%v", message_id), nil
+}
+
+func (app *App) updateMessageState(ctx context.Context, message_id string, state string) (string, error) {
+	sql := fmt.Sprintf(`
+        UPDATE %s.messages 
+        SET state = @state
+        WHERE id = @id
+        RETURNING id
+    `, pgx.Identifier{DBSchema}.Sanitize())
+
+	id := ulid.Make().String()
+
+	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+		"id":    message_id,
+		"state": state,
+	}).Scan(&id)
+
+	if err != nil {
+		log.Println("SOMETHING IS WRONG WHEN TRYING TO UPDATE MESSAGE STATE: ", err)
+		return "", err
+	}
+
+	return fmt.Sprintf("%v", id), nil
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/oklog/ulid/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 	"golang.org/x/oauth2/clientcredentials"
@@ -218,7 +219,7 @@ func main() {
 	mainMux.HandleFunc("/auth/logout", app.HandleLogOut)
 	mainMux.HandleFunc("/auth/register", app.HandleRegister)
 	mainMux.HandleFunc("/auth/refresh_token", app.HandleRefreshToken)
-	mainMux.HandleFunc("/service/minIO", func(w http.ResponseWriter, r *http.Request) {
+	mainMux.HandleFunc("/service/webhooks/minio", func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		if header == "" {
 			http.Error(w, "Unauthorized Request", http.StatusUnauthorized)
@@ -231,14 +232,41 @@ func main() {
 			return
 		}
 
+		secret_token := os.Getenv("MINIO_SECRET_TOKEN")
 		token := parts[1]
-		//TODO: Generate token and save it to .env
-		if "smething" != token {
+
+		if secret_token != token {
 			http.Error(w, "Invalid token", http.StatusBadRequest)
 			return
 		}
 
-		//update the db
+		type MinioWebhookPayload struct {
+			EventName string `json:"EventName"`
+			Key       string `json:"Key"`
+			Records   []struct {
+				EventTime string `json:"eventTime"`
+				S3        struct {
+					Bucket struct {
+						Name string `json:"name"`
+					} `json:"bucket"`
+					Object struct {
+						Key         string `json:"key"`
+						Size        int64  `json:"size"`
+						ContentType string `json:"contentType"`
+					} `json:"object"`
+				} `json:"s3"`
+			} `json:"Records"`
+		}
+
+		var payload MinioWebhookPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		}
+		key := payload.Records[0].S3.Object.Key
+
+		message_id := strings.Split(key, "%2F")[1]
+		ctx := r.Context()
+		app.updateMessageState(ctx, message_id, "SENT")
+		log.Println("Message id: ", message_id)
 	})
 
 	protectedMux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
@@ -296,9 +324,6 @@ func main() {
 				return
 			}
 
-			log.Println("File name: ", payload.Files[0].FileName)
-			log.Println("File type: ", payload.Files[0].FileType)
-
 			var urls []string
 			for _, val := range payload.Files {
 				var upload_type string
@@ -317,7 +342,15 @@ func main() {
 					return
 				}
 
-				uniqueKey := fmt.Sprintf("%s/%s", payload.Room_ID, val.FileName)
+				id := ulid.Make().String()
+				uniqueKey := fmt.Sprintf("%s/%s/%s", payload.Room_ID, id, val.FileName)
+				log.Println("Image unique key: ", uniqueKey)
+
+				_, err := app.addNewPendingMediaMessage(ctx, id, payload.User_ID, payload.Room_ID, uniqueKey)
+				if err != nil {
+					log.Println("Error when trying to add new pending message: ", err)
+					continue
+				}
 
 				urlStr, err := app.generatePutPresignedURL(r.Context(), upload_type, uniqueKey, content_type)
 				if err != nil {

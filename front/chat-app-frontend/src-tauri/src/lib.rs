@@ -842,7 +842,7 @@ async fn upload_file(url: String, file_url: String) -> Result<bool, String> {
 
     println!("file data: {}", file_type);
     println!("file data: {}", content_type);
-    // println!("file data: {}", file_path);
+    println!("file data: {}", file_url);
 
     headers.insert(
         reqwest::header::CONTENT_TYPE,
