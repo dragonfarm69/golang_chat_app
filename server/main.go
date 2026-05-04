@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -33,6 +34,12 @@ type JwksKey struct {
 
 type JwkResponse struct {
 	Keys []JwksKey `json: "keys"`
+}
+
+type FileMetaData struct {
+	FileName string `json:"file_name"`
+	FileSize string `json:"file_size"`
+	FileType string `json:"file_type"`
 }
 
 type App struct {
@@ -211,6 +218,28 @@ func main() {
 	mainMux.HandleFunc("/auth/logout", app.HandleLogOut)
 	mainMux.HandleFunc("/auth/register", app.HandleRegister)
 	mainMux.HandleFunc("/auth/refresh_token", app.HandleRefreshToken)
+	mainMux.HandleFunc("/service/minIO", func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			http.Error(w, "Unauthorized Request", http.StatusUnauthorized)
+			return
+		}
+
+		parts := strings.Split(header, " ")
+		if len(parts) != 2 && parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
+			return
+		}
+
+		token := parts[1]
+		//TODO: Generate token and save it to .env
+		if "smething" != token {
+			http.Error(w, "Invalid token", http.StatusBadRequest)
+			return
+		}
+
+		//update the db
+	})
 
 	protectedMux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -253,14 +282,13 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	protectedMux.HandleFunc("/api/image", func(w http.ResponseWriter, r *http.Request) {
-
+	protectedMux.HandleFunc("/api/media", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			var payload struct {
-				File_name   string `json:"file_name"`
-				File_size   string `json:"file_size"`
-				Upload_date string `json:"upload_date"`
+				Files   []FileMetaData `json:"files"`
+				Room_ID string         `json:"room_id"`
+				User_ID string         `json:"user_id"`
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -268,19 +296,48 @@ func main() {
 				return
 			}
 
-			log.Println("File name: ", payload.File_name)
-			val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
-			if err != nil {
-				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
+			log.Println("File name: ", payload.Files[0].FileName)
+			log.Println("File type: ", payload.Files[0].FileType)
+
+			var urls []string
+			for _, val := range payload.Files {
+				var upload_type string
+				content_type := val.FileType
+
+				switch content_type {
+				case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
+					upload_type = "chat-image"
+
+				case "video/mp4", "video/webm", "video/quicktime":
+					upload_type = "chat-video"
+
+				default:
+					errMsg := fmt.Sprintf("Unsupported file type: %s", content_type)
+					http.Error(w, errMsg, http.StatusBadRequest)
+					return
+				}
+
+				uniqueKey := fmt.Sprintf("%s/%s", payload.Room_ID, val.FileName)
+
+				urlStr, err := app.generatePutPresignedURL(r.Context(), upload_type, uniqueKey, content_type)
+				if err != nil {
+					log.Printf("MinIO Presign Error: %v", err)
+					http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
+					return
+				}
+
+				urls = append(urls, urlStr)
 			}
-			log.Println(val)
+			log.Println("All files: ", payload.Files)
+			log.Println("Reuslt URL: ", urls)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(urls)
 		case http.MethodDelete:
 			var payload struct {
-				File_name   string `json:"file_name"`
-				File_size   string `json:"file_size"`
-				Upload_date string `json:"upload_date"`
+				Files   []FileMetaData `json"files"`
+				Room_ID string         `json:"room_id"`
+				User_ID string         `json:"user_id"`
 			}
 
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -288,36 +345,14 @@ func main() {
 				return
 			}
 
-			log.Println("File name: ", payload.File_name)
-			val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
+			// log.Println("File name: ", payload.File_name)
+			// val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
 			if err != nil {
 				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
 			}
-			log.Println(val)
+			// log.Println(val)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			app.generateDeletePresignURL(r.Context(), payload.File_name, payload.File_size)
-		case http.MethodPut:
-			var payload struct {
-				File_name   string `json:"file_name"`
-				File_size   string `json:"file_size"`
-				Upload_date string `json:"upload_date"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				http.Error(w, "invalid json body", http.StatusBadRequest)
-				return
-			}
-
-			log.Println("File name: ", payload.File_name)
-			val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
-			if err != nil {
-				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
-			}
-			log.Println(val)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			app.generatePutPresignedURL(r.Context(), payload.File_name, payload.File_size)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

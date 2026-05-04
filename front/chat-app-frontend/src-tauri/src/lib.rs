@@ -6,13 +6,16 @@ use jsonwebtoken::Validation;
 use jsonwebtoken::{decode, decode_header, TokenData};
 use jsonwebtoken::{Algorithm, DecodingKey};
 use keyring::Entry;
+use reqwest::{header, Body};
 use serde::Deserialize;
 use serde::Serialize;
 use specta::Type;
 use specta_typescript::Typescript;
-use std::env;
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
-use tauri::{Emitter, State};
+use std::{env, string};
+use tauri::{fs, Emitter, State};
 use tauri_specta::{collect_commands, Builder};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, Duration};
@@ -118,6 +121,13 @@ pub struct RoomLitePayload {
 pub struct JoinRoomPayload {
     user_id: String,
     room_id: String,
+}
+
+#[derive(Serialize, Deserialize, Type, Debug)]
+pub struct FileMetaData {
+    pub file_size: String,
+    pub file_name: String,
+    pub file_type: String,
 }
 
 //Fetch jwk code for validation
@@ -766,6 +776,103 @@ async fn delete_message(room_id: String, message_id: String) -> Result<bool, Str
     }
 }
 
+#[tauri::command]
+#[specta::specta]
+async fn send_media(
+    files: Vec<FileMetaData>,
+    room_id: String,
+    user_id: String,
+) -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let access_token = get_data_from_keyring("access_token".to_string())?;
+
+    let url = format!("{}/api/media", BACKEND_URL);
+    // println!("Before sending: ", files)
+    let res = client
+        .post(&url)
+        .bearer_auth(&access_token)
+        .json(&serde_json::json!({ "files": files, "room_id": room_id, "user_id": user_id}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if res.status().is_success() {
+        let text = res.text().await.map_err(|e| e.to_string())?;
+
+        let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+
+        let urls = match value {
+            serde_json::Value::String(s) => vec![s],
+            serde_json::Value::Array(arr) => arr
+                .into_iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect(),
+            _ => return Err("Unexpected Response".to_string()),
+        };
+        Ok(urls)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        Err(format!("Error when sending media: {}", error_body))
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn upload_file(url: String, file_url: String) -> Result<bool, String> {
+    let client = reqwest::Client::new();
+
+    let mut headers = reqwest::header::HeaderMap::new();
+
+    let file = tokio::fs::File::open(&file_url)
+        .await
+        .map_err(|e| e.to_string())?;
+    let metadata = file.metadata().await.map_err(|e| e.to_string())?;
+    let file_size = metadata.size();
+    let file_stream = tokio_util::io::ReaderStream::new(file);
+
+    //file type
+    let file_path = Path::new(&file_url);
+    let file_type = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("octet-stream");
+    let content_type = format!("image/{}", file_type);
+
+    println!("file data: {}", file_type);
+    println!("file data: {}", content_type);
+    // println!("file data: {}", file_path);
+
+    headers.insert(
+        reqwest::header::CONTENT_TYPE,
+        reqwest::header::HeaderValue::from_str(&content_type).map_err(|e| e.to_string())?,
+    );
+    headers.insert(
+        reqwest::header::CONTENT_LENGTH,
+        reqwest::header::HeaderValue::from_str(&file_size.to_string())
+            .map_err(|e| e.to_string())?,
+    );
+
+    println!("sending file to: {}", url);
+    let res = client
+        .put(&url)
+        .headers(headers)
+        .body(reqwest::Body::wrap_stream(file_stream))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if res.status().is_success() {
+        Ok(true)
+    } else {
+        let error_body = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Cannot read error body".to_string());
+        Err(format!("Error when sending media: {}", error_body))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -799,6 +906,8 @@ pub fn run() {
         create_room,
         edit_message,
         delete_message,
+        send_media,
+        upload_file
     ]);
 
     #[cfg(debug_assertions)] // <- Only export on non-release builds
@@ -807,6 +916,7 @@ pub fn run() {
         .expect("Failed to export typescript bindings");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())

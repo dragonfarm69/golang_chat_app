@@ -11,10 +11,11 @@ import { useUser } from "../../Context/userContext";
 import { Virtuoso } from "react-virtuoso";
 import { MessageMap } from "./Hooks/useRooms";
 import { MessagePayload } from "../../bindings";
-import drakeImage from "./drake.webp";
 import { ImageCard } from "../../Components/CustomImageComponent";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { stat } from "@tauri-apps/plugin-fs";
+import { FileMetaData } from "../../bindings";
 
 interface ChatAreaProps {
   selectedRoom: { id: string; name: string };
@@ -48,6 +49,8 @@ export function ChatArea({
 
   const [showOptions, setShowOptions] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
+  const [filePath, setFilePath] = useState<string[]>([]);
+  const [fileMetadatas, setFileMetadatas] = useState<FileMetaData[]>([]);
 
   useEffect(() => {
     if (chatLogRef.current) {
@@ -149,12 +152,16 @@ export function ChatArea({
     isLoadingMore.current = false;
   }, [messages, selectedRoom.id, setAllMessages]);
 
-  const handleRemoveMedia = (fileUrl: string) => {
-    setFiles((prev) => prev.filter((file) => file !== fileUrl));
+  const handleRemoveMedia = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setFileMetadatas((prev) => prev.filter((_, i) => i !== index));
+
+    console.log("after: ", files);
   };
 
   const handleRemoveAll = () => {
     setFiles([]);
+    setFileMetadatas([]);
   };
 
   return (
@@ -269,9 +276,12 @@ export function ChatArea({
             <button onClick={handleRemoveAll}>X</button>
           </div>
           <ul className="media-preview-content">
-            {files.map((file) => (
-              <li>
-                <ImageCard image={file} handleRemove={handleRemoveMedia} />
+            {files.map((url, index) => (
+              <li key={index}>
+                <ImageCard
+                  image={url}
+                  handleRemove={() => handleRemoveMedia(index)}
+                />
               </li>
             ))}
           </ul>
@@ -293,7 +303,44 @@ export function ChatArea({
             onMessageChange(e.target.value);
           }}
         />
-        <button type="submit" className="send-button">
+        <button
+          type="button"
+          className="send-button"
+          onClick={async () => {
+            if (files.length >= 1) {
+              if (!userData) {
+                console.error("user info not found");
+                return;
+              }
+              try {
+                const presignedURLs = await commands.sendMedia(
+                  fileMetadatas,
+                  selectedRoom.id,
+                  userData?.id,
+                );
+
+                console.log("got the urls: ", presignedURLs);
+                if (presignedURLs.status === "error") {
+                  console.error(
+                    "Error when trying to upload file: ",
+                    presignedURLs.error,
+                  );
+                  return;
+                }
+
+                await Promise.all(
+                  presignedURLs.data.map((url, i) => {
+                    console.log("sending file with url: ", url);
+                    console.log("The file sent: ", filePath[i]);
+                    commands.uploadFile(url, filePath[i]);
+                  }),
+                );
+              } catch (err) {
+                console.error("Error when trying to upload file: ", err);
+              }
+            }
+          }}
+        >
           Send
         </button>
         <button
@@ -309,14 +356,49 @@ export function ChatArea({
             if (file) {
               try {
                 const assetUrl = convertFileSrc(file);
-                console.log(typeof assetUrl);
-                console.log("Assert: ", assetUrl);
+                const file_data = file.split("/");
+                const file_name = file_data[file_data.length - 1];
+                const ext = file_name.split(".").pop()?.toLowerCase() ?? ""; //TODO: Handle weird case -> .txt.exam/.png.jsp
+                const file_type = ((): string => {
+                  switch (ext) {
+                    // Images
+                    case "png":
+                      return "image/png";
+                    case "jpg":
+                    case "jpeg":
+                      return "image/jpeg";
+                    case "gif":
+                      return "image/gif";
+                    case "webp":
+                      return "image/webp";
+                    // Videos
+                    case "mp4":
+                      return "video/mp4";
+                    case "webm":
+                      return "video/webm";
+                    case "mov":
+                      return "video/quicktime";
+                    default:
+                      return `application/octet-stream`;
+                  }
+                })();
+
+                setFilePath((prev) => [...prev, file]);
+                await stat(file).then((data) => {
+                  setFileMetadatas((prev) => [
+                    ...prev,
+                    {
+                      file_name: file_name,
+                      file_size: data.size.toString(),
+                      file_type: file_type,
+                    },
+                  ]);
+                });
                 setFiles((prev) => [...prev, assetUrl]);
               } catch (error) {
                 console.error("error when fetching file: ", error);
               }
             }
-            console.log("FILE: ", file);
           }}
         >
           📎

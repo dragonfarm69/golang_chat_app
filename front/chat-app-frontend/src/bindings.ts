@@ -135,6 +135,22 @@ async deleteMessage(roomId: string, messageId: string) : Promise<Result<boolean,
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async sendMedia(files: FileMetaData[], roomId: string, userId: string) : Promise<Result<string[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("send_media", { files, roomId, userId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async uploadFile(url: string, fileUrl: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("upload_file", { url, fileUrl }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -148,6 +164,7 @@ async deleteMessage(roomId: string, messageId: string) : Promise<Result<boolean,
 
 /** user-defined types **/
 
+export type FileMetaData = { file_size: string; file_name: string; file_type: string }
 export type MessagePayload = { id: string; user_id: string; room_id: string; content: string; username: string; timeStamp: string; action: string }
 export type MessageResponse = { id: string; owner_name: string; room_id: string; content: string; timeStamp: string }
 export type RegisterPayload = { email: string; first_name: string; last_name: string; password: string }

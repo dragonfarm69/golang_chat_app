@@ -318,6 +318,7 @@ function HomePage() {
               <div className={"multi-chat-container"}>
                 {selectedRooms.slice(0, 3).map((room) => (
                   <ChatWindow
+                    key={room.id}
                     room={room}
                     currentRegionId={currentRegionId}
                     selectedRooms={selectedRooms}
@@ -355,6 +356,7 @@ function HomePage() {
                 <div className={"multi-chat-container"}>
                   {selectedRooms.slice(3, 6).map((room) => (
                     <ChatWindow
+                      key={room.id}
                       room={room}
                       currentRegionId={currentRegionId}
                       selectedRooms={selectedRooms}
