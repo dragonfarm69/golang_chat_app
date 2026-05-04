@@ -7,6 +7,11 @@ SET search_path TO chat;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =====================
+-- Custom Types
+-- =====================
+CREATE TYPE message_state AS ENUM ('PENDING', 'SENT', 'DELETED');
+
+-- =====================
 -- Users table
 -- =====================
 CREATE TABLE IF NOT EXISTS users (
@@ -53,7 +58,7 @@ CREATE TABLE IF NOT EXISTS messages (
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- removed NOT NULL
     content TEXT NOT NULL,
     message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'file', 'system')),
-    is_edited BOOLEAN DEFAULT FALSE,
+    state message_state DEFAULT 'PENDING',
     parent_id VARCHAR(26) REFERENCES messages(id) ON DELETE SET NULL, -- for thread/reply support
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
