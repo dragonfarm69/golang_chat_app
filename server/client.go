@@ -34,24 +34,26 @@ type Client struct {
 }
 
 type MessagePayload struct {
-	Id        string `json:"id"`
-	User_ID   string `json:"user_id"`
-	UserName  string `json:"username"`
-	Room_ID   string `json:"room_id"`
-	Content   string `json:"content"`
-	TimeStamp string `json:"timeStamp"`
-	Action    string `json:"action"`
+	Id           string `json:"id"`
+	User_ID      string `json:"user_id"`
+	UserName     string `json:"username"`
+	Room_ID      string `json:"room_id"`
+	Content      string `json:"content"`
+	TimeStamp    string `json:"timeStamp"`
+	Action       string `json:"action"`
+	Message_Type string `json:"message_type"`
 }
 
 type ResponseMessagePayload struct {
-	OriginalId string `json:"original_id"`
-	Id         string `json:"id"`
-	User_ID    string `json:"user_id"`
-	UserName   string `json:"username"`
-	Room_ID    string `json:"room_id"`
-	Content    string `json:"content"`
-	TimeStamp  string `json:"timeStamp"`
-	Action     string `json:"action"`
+	OriginalId   string `json:"original_id"`
+	Id           string `json:"id"`
+	User_ID      string `json:"user_id"`
+	UserName     string `json:"username"`
+	Room_ID      string `json:"room_id"`
+	Content      string `json:"content"`
+	TimeStamp    string `json:"timeStamp"`
+	Action       string `json:"action"`
+	Message_Type string `json:"message_type"`
 }
 
 var upgrader = websocket.Upgrader{

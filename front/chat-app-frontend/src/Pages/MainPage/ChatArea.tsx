@@ -8,7 +8,7 @@ import {
 } from "react";
 import { commands, MessageResponse } from "../../bindings";
 import { useUser } from "../../Context/userContext";
-import { Virtuoso } from "react-virtuoso";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { MessageMap } from "./Hooks/useRooms";
 import { MessagePayload } from "../../bindings";
 import { ImageCard } from "../../Components/CustomImageComponent";
@@ -37,6 +37,7 @@ export function ChatArea({
   setAllMessages,
 }: ChatAreaProps) {
   const mediaBaseURL = "http://localhost:8082";
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [firstItemIdex, setFirstItemIndex] = useState(1_000_000);
   const isLoadingMore = useRef(true);
   const chatLogRef = useRef<HTMLDivElement>(null);
@@ -69,6 +70,14 @@ export function ChatArea({
       isLoadingMore.current = false; // messages loaded, allow loadMore on scroll
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    virtuosoRef.current?.scrollToIndex({
+      index: messages.length - 1,
+      behavior: "smooth",
+    });
+  }, [messages.length]);
 
   const triggerEventTyping = () => {
     if (!userData || !userData.id) {
@@ -340,7 +349,11 @@ export function ChatArea({
                     console.log("The file sent: ", filePath[i]);
                     commands.uploadFile(url, filePath[i]);
                   }),
-                );
+                ).then(() => {
+                  setFileMetadatas([]);
+                  setFiles([]);
+                  setFilePath([]);
+                });
               } catch (err) {
                 console.error("Error when trying to upload file: ", err);
               }

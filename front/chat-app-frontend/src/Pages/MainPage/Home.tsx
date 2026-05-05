@@ -170,14 +170,27 @@ function HomePage() {
 
         const new_msg_data: Message = {
           id: msg.id,
-          user_id: userData.id,
-          username: userData.username,
+          user_id: msg.user_id,
+          username: msg.username,
           room_id: msg.room_id,
           content: msg.content,
           timeStamp: msg.timeStamp,
+          message_type: msg.message_type,
         };
 
+        console.log("new message data: ", new_msg_data);
+
         updateMessage(msg.original_id, new_msg_data);
+        setAllMessages((prev) => {
+          const roomMessages = prev[msg.room_id] ?? [];
+          const updatedMessages = roomMessages.map((m) =>
+            m.id === msg.original_id ? new_msg_data : m,
+          );
+          if (!roomMessages.some((m) => m.id === msg.original_id)) {
+            updatedMessages.push(new_msg_data);
+          }
+          return { ...prev, [msg.room_id]: updatedMessages };
+        });
       });
       return () => {
         unlisten.then((stop) => stop());

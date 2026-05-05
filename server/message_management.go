@@ -199,3 +199,37 @@ func (app *App) updateMessageState(ctx context.Context, message_id string, state
 
 	return fmt.Sprintf("%v", id), nil
 }
+
+func (app *App) generateResponsePayload(ctx context.Context, message_id string) (ResponseMessagePayload, error) {
+	messagesTable := pgx.Identifier{DBSchema, "messages"}.Sanitize()
+	usersTable := pgx.Identifier{DBSchema, "users"}.Sanitize()
+	sql := fmt.Sprintf(`
+		SELECT m.id, u.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at, m.message_type
+		FROM %s m
+		LEFT JOIN %s u ON m.user_id = u.id
+		WHERE m.id = $1
+	`, messagesTable, usersTable)
+	args := []interface{}{message_id}
+	var createdAt time.Time
+
+	var message ResponseMessagePayload
+	err := app.db_pool.QueryRow(ctx, sql, args...).Scan(
+		&message.Id,
+		&message.User_ID,
+		&message.UserName,
+		&message.Room_ID,
+		&message.Content,
+		&createdAt,
+		&message.Message_Type,
+	)
+	if err != nil {
+		return ResponseMessagePayload{}, fmt.Errorf("Query failed: %w", err)
+	}
+
+	message.OriginalId = message_id
+	message.TimeStamp = createdAt.Format(time.RFC3339)
+	message.Action = "SEND"
+
+	log.Println("MESSAGES INFO: ", message)
+	return message, nil
+}

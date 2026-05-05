@@ -7,6 +7,7 @@ interface Message {
   username: string;
   content: string;
   timeStamp: string;
+  message_type: string;
 }
 
 const db = new Dexie("MessageDB") as Dexie & {

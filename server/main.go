@@ -231,7 +231,6 @@ func main() {
 			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
 			return
 		}
-
 		secret_token := os.Getenv("MINIO_SECRET_TOKEN")
 		token := parts[1]
 
@@ -259,14 +258,44 @@ func main() {
 		}
 
 		var payload MinioWebhookPayload
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		}
-		key := payload.Records[0].S3.Object.Key
 
-		message_id := strings.Split(key, "%2F")[1]
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		if len(payload.Records) == 0 {
+			http.Error(w, "no records in payload", http.StatusBadRequest)
+			return
+		}
+
+		key := payload.Records[0].S3.Object.Key
+		splitted_strings := strings.Split(key, "%2F")
+		message_id := splitted_strings[2]
+		room_id := splitted_strings[1]
+
+		// ("%s/%s/%s/%s", content_type, payload.Room_ID, id, val.FileName)
 		ctx := r.Context()
 		app.updateMessageState(ctx, message_id, "SENT")
 		log.Println("Message id: ", message_id)
+
+		hub := app.hubManager.getHub(room_id)
+		message, err := app.generateResponsePayload(ctx, message_id)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		jsonPayload, err := json.Marshal(message)
+		if err != nil {
+			log.Println("Error when marshalling payload: ", err)
+			return
+		}
+		if hub == nil {
+			log.Println("Webhook: no active hub for room:", room_id)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		hub.broadcaster <- jsonPayload
 	})
 
 	protectedMux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
@@ -343,7 +372,7 @@ func main() {
 				}
 
 				id := ulid.Make().String()
-				uniqueKey := fmt.Sprintf("%s/%s/%s", payload.Room_ID, id, val.FileName)
+				uniqueKey := fmt.Sprintf("%s/%s/%s/%s", content_type, payload.Room_ID, id, val.FileName)
 				log.Println("Image unique key: ", uniqueKey)
 				_, err := app.addNewPendingMediaMessage(ctx, id, content_type, payload.User_ID, payload.Room_ID, uniqueKey)
 				if err != nil {
