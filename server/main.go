@@ -1,110 +1,42 @@
 package main
 
 import (
+	handler "chat-app-server/Handler"
+	"chat-app-server/Internal/app"
+	"chat-app-server/Internal/data"
+	"chat-app-server/Internal/storage"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/MicahParks/keyfunc/v3"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/oklog/ulid/v2"
-	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
-	"golang.org/x/oauth2/clientcredentials"
 )
 
-type JwksKey struct {
-	Kid string `json: "kid"`
-	Kty string `json: "kty"`
-	Alg string `json: "alg"`
-	Use string `json: "use"`
-	N   string `json: "n"`
-	E   string `json: "e"`
+type Server struct {
+	dataStorage  *data.DataStorage
+	cloudService *storage.S3Service
+	appLogic     *app.App
 }
 
-type JwkResponse struct {
-	Keys []JwksKey `json: "keys"`
-}
-
-type FileMetaData struct {
-	FileName string `json:"file_name"`
-	FileSize string `json:"file_size"`
-	FileType string `json:"file_type"`
-}
-
-type App struct {
-	redis_db            *redis.Client
-	db_pool             *pgxpool.Pool
-	s3_client           *s3.Client
-	s3_presigned_client *s3.PresignClient
-	hubManager          *HubManager
-	config              *clientcredentials.Config
-}
-
-func NewApp(ctx context.Context) (*App, error) {
-	//load env
-	dbURL := os.Getenv("DB_URL")
-
-	//load DB
-	log.Printf("Attempting to connect to database: %s", dbURL)
-	Pool, err := pgxpool.New(ctx, dbURL)
+func InitializeServer(ctx context.Context) (*Server, error) {
+	dataStore, err := data.NewDataStorage(ctx, os.Getenv("DB_URL"), os.Getenv("REDIS_URL"), os.Getenv("SCHEMA_NAME"))
 	if err != nil {
 		return nil, err
 	}
-
-	//load config
-	Config := &clientcredentials.Config{
-		ClientID:     os.Getenv("ADMIN_ID"),
-		ClientSecret: os.Getenv("ADMIN_SECRET"),
-		TokenURL:     os.Getenv("KEYCLOAK_TOKEN_URL"),
-	}
-
-	//load redis
-	opt, err := redis.ParseURL(os.Getenv("REDIS_URL"))
+	storageService, err := storage.NewCloudService()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-
-	log.Printf("Attempting to connect to database: %s", os.Getenv("REDIS_URL"))
-	client := redis.NewClient(opt)
-
-	//load cloud storage
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion("us-east-1"),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("minioadmin", "miniocloud", "")),
-	)
-
-	if err != nil {
-		log.Fatal("cannot load sdk config: ", err)
-	}
-
-	s3_client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:9000")
-		o.UsePathStyle = true
-	})
-
-	presignedClient := s3.NewPresignClient(s3_client)
-
-	log.Println("minIO should work now")
-
-	return &App{
-		redis_db:            client,
-		db_pool:             Pool,
-		s3_client:           s3_client,
-		s3_presigned_client: presignedClient,
-		config:              Config,
-		hubManager:          newHubManager(),
+	return &Server{
+		dataStorage:  dataStore,
+		cloudService: storageService,
+		appLogic:     app.NewApp(),
 	}, nil
 }
 
@@ -112,7 +44,7 @@ var addr = flag.String("addr", ":8080", "chat server service")
 var public_keys keyfunc.Keyfunc
 
 func fetchPublicToken() {
-	var URL = getPublicKeyEndpoint()
+	var URL = os.Getenv("KEYCLOAK_PUBLIC_KEY_ENDPOINT")
 
 	var err error
 	public_keys, err = keyfunc.NewDefault([]string{URL})
@@ -152,7 +84,7 @@ func isValidToken(token string) bool {
 	return false
 }
 
-func (app *App) TokenValidation(next http.Handler) http.Handler {
+func (server *Server) TokenValidation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		if header == "" {
@@ -171,7 +103,7 @@ func (app *App) TokenValidation(next http.Handler) http.Handler {
 
 		ctx := r.Context()
 		//check if token is blacklisted
-		isBlacklisted, err := app.isTokenBlacklisted(ctx, token)
+		isBlacklisted, err := server.dataStorage.IsTokenBlacklisted(ctx, token)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
@@ -198,129 +130,60 @@ func main() {
 	fetchPublicToken()
 
 	ctx := context.Background()
-	app, err := NewApp(ctx)
+	server, err := InitializeServer(ctx)
 	if err != nil {
-		panic(err)
+		log.Fatal("Failed to initialize server: ", err)
 	}
-	defer app.db_pool.Close()
-	defer app.redis_db.Close()
 
+	// Create handlers with their dependencies
+	authHandler := &handler.AuthHandler{
+		Storage:    server.dataStorage,
+		Config:     server.appLogic.Config,
+		HubManager: server.appLogic.HubManager,
+	}
+	messageHandler := &handler.MessageHandler{
+		Storage:    server.dataStorage,
+		Service:    server.cloudService,
+		HubManager: server.appLogic.HubManager,
+	}
+	roomHandler := &handler.RoomHandler{
+		Storage: server.dataStorage,
+	}
+	userHandler := &handler.UserHandler{
+		Storage: server.dataStorage,
+	}
+
+	// Public routes
 	mainMux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		// hubId := r.URL.Query().Get("hub")
 		user_id := r.URL.Query().Get("user_id")
-		println("client id: ", user_id)
 		if user_id == "" {
 			http.Error(w, "Unknown User", http.StatusBadRequest)
 			return
 		}
-
-		app.serveWs(app.hubManager, w, r, user_id)
+		app.ServeWs(server.appLogic.HubManager, w, r, user_id, server.dataStorage)
 	})
-	mainMux.HandleFunc("/auth/logout", app.HandleLogOut)
-	mainMux.HandleFunc("/auth/register", app.HandleRegister)
-	mainMux.HandleFunc("/auth/refresh_token", app.HandleRefreshToken)
-	mainMux.HandleFunc("/service/webhooks/minio", func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
-		if header == "" {
-			http.Error(w, "Unauthorized Request", http.StatusUnauthorized)
-			return
-		}
+	mainMux.HandleFunc("/auth/logout", authHandler.HandleLogOut)
+	mainMux.HandleFunc("/auth/register", authHandler.HandleRegister)
+	mainMux.HandleFunc("/auth/refresh_token", authHandler.HandleRefreshToken)
+	mainMux.HandleFunc("/service/webhooks/minio", messageHandler.HandleMediaWebhookResponse)
 
-		parts := strings.Split(header, " ")
-		if len(parts) != 2 && parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
-			return
-		}
-		secret_token := os.Getenv("MINIO_SECRET_TOKEN")
-		token := parts[1]
-
-		if secret_token != token {
-			http.Error(w, "Invalid token", http.StatusBadRequest)
-			return
-		}
-
-		type MinioWebhookPayload struct {
-			EventName string `json:"EventName"`
-			Key       string `json:"Key"`
-			Records   []struct {
-				EventTime string `json:"eventTime"`
-				S3        struct {
-					Bucket struct {
-						Name string `json:"name"`
-					} `json:"bucket"`
-					Object struct {
-						Key         string `json:"key"`
-						Size        int64  `json:"size"`
-						ContentType string `json:"contentType"`
-					} `json:"object"`
-				} `json:"s3"`
-			} `json:"Records"`
-		}
-
-		var payload MinioWebhookPayload
-
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "invalid payload", http.StatusBadRequest)
-			return
-		}
-		if len(payload.Records) == 0 {
-			http.Error(w, "no records in payload", http.StatusBadRequest)
-			return
-		}
-
-		key := payload.Records[0].S3.Object.Key
-		splitted_strings := strings.Split(key, "%2F")
-		message_id := splitted_strings[2]
-		room_id := splitted_strings[1]
-
-		// ("%s/%s/%s/%s", content_type, payload.Room_ID, id, val.FileName)
-		ctx := r.Context()
-		app.updateMessageState(ctx, message_id, "SENT")
-		log.Println("Message id: ", message_id)
-
-		hub := app.hubManager.getHub(room_id)
-		message, err := app.generateResponsePayload(ctx, message_id)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		jsonPayload, err := json.Marshal(message)
-		if err != nil {
-			log.Println("Error when marshalling payload: ", err)
-			return
-		}
-		if hub == nil {
-			log.Println("Webhook: no active hub for room:", room_id)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		hub.broadcaster <- jsonPayload
-	})
-
+	// Protected routes
 	protectedMux.HandleFunc("/api/room", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		//get room list
 		case http.MethodGet:
-			app.HandleListRoom(w, r)
-			//create room
+			roomHandler.HandleListRoom(w, r)
 		case http.MethodPost:
-			app.HandleCreateRoom(w, r)
-		//delete room
-		// case http.MethodDelete:
-
+			roomHandler.HandleCreateRoom(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 	protectedMux.HandleFunc("/api/message", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		//edit
 		case http.MethodPatch:
-			app.HandleEditMessage(w, r)
-		//delete
+			messageHandler.HandleEditMessage(w, r)
 		case http.MethodDelete:
-			app.HandleDeleteMessage(w, r)
+			messageHandler.HandleDeleteMessage(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -328,13 +191,10 @@ func main() {
 	protectedMux.HandleFunc("/api/user", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			app.HandleFetchUserInfo(w, r)
-		//edit
-		case http.MethodPatch:
-			app.HandleEditUser(w, r)
-		//delete
-		case http.MethodDelete:
-			app.HandleDeleteUser(w, r)
+			userHandler.HandleFetchUserInfo(w, r)
+		// TODO: Implement edit and delete user
+		// case http.MethodPatch:
+		// case http.MethodDelete:
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -342,98 +202,29 @@ func main() {
 	protectedMux.HandleFunc("/api/media", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
-			var payload struct {
-				Files   []FileMetaData `json:"files"`
-				Room_ID string         `json:"room_id"`
-				User_ID string         `json:"user_id"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				http.Error(w, "invalid json body", http.StatusBadRequest)
-				return
-			}
-
-			var urls []string
-			var upload_type string = "chat-media"
-			for _, val := range payload.Files {
-				var content_type string
-
-				switch val.FileType {
-				case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
-					content_type = "image"
-
-				case "video/mp4", "video/webm", "video/quicktime":
-					content_type = "video"
-
-				default:
-					errMsg := fmt.Sprintf("Unsupported file type: %s", val.FileType)
-					http.Error(w, errMsg, http.StatusBadRequest)
-					return
-				}
-
-				id := ulid.Make().String()
-				uniqueKey := fmt.Sprintf("%s/%s/%s/%s", content_type, payload.Room_ID, id, val.FileName)
-				log.Println("Image unique key: ", uniqueKey)
-				_, err := app.addNewPendingMediaMessage(ctx, id, content_type, payload.User_ID, payload.Room_ID, uniqueKey)
-				if err != nil {
-					log.Println("Error when trying to add new pending message: ", err)
-					continue
-				}
-
-				urlStr, err := app.generatePutPresignedURL(r.Context(), upload_type, uniqueKey, content_type)
-				if err != nil {
-					log.Printf("MinIO Presign Error: %v", err)
-					http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
-					return
-				}
-
-				urls = append(urls, urlStr)
-			}
-			log.Println("All files: ", payload.Files)
-			log.Println("Reuslt URL: ", urls)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(urls)
+			messageHandler.HandleGeneratePresignURL(w, r, "post")
 		case http.MethodDelete:
-			var payload struct {
-				Files   []FileMetaData `json"files"`
-				Room_ID string         `json:"room_id"`
-				User_ID string         `json:"user_id"`
-			}
-
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-				http.Error(w, "invalid json body", http.StatusBadRequest)
-				return
-			}
-
-			// log.Println("File name: ", payload.File_name)
-			// val, err := app.generateGetPresignedURL(r.Context(), payload.File_name, payload.File_size)
-			if err != nil {
-				http.Error(w, "Failed to create presigned url", http.StatusInternalServerError)
-			}
-			// log.Println(val)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
+			//TODO: Implement delete image
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	protectedMux.HandleFunc("/api/disconnect/", app.HandleDisconnect)
-	protectedMux.HandleFunc("/api/fetch_room_message", app.HandleFetchMessages)
-	protectedMux.HandleFunc("/api/join", app.HandleJoinRoom)
+	protectedMux.HandleFunc("/api/disconnect/", authHandler.HandleDisconnect)
+	protectedMux.HandleFunc("/api/fetch_room_message", messageHandler.HandleFetchMessages)
+	protectedMux.HandleFunc("/api/join", roomHandler.HandleJoinRoom)
 
-	//middleware
-	mainMux.Handle("/api/", app.TokenValidation(protectedMux))
+	// Middleware
+	mainMux.Handle("/api/", server.TokenValidation(protectedMux))
 
-	//Configure CORS
-	c := cors.New(cors.Options{
+	// Configure CORS
+	corsMiddleware := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"}, // Allow all origins
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"*"},
 	})
-	handler := c.Handler(mainMux)
+	corsHandler := corsMiddleware.Handler(mainMux)
 
-	err = http.ListenAndServe(*addr, handler)
+	err = http.ListenAndServe(*addr, corsHandler)
 	if err != nil {
 		log.Fatal("error when starting server: ", err)
 	}

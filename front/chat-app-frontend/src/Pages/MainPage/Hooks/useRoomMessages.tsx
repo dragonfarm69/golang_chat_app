@@ -67,6 +67,7 @@ export const handleSendMessage =
       username: userData.username,
       content: messageText,
       timeStamp: timestamp,
+      message_type: "text",
     };
 
     saveChatData(dbMessage);

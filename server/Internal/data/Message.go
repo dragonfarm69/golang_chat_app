@@ -1,6 +1,7 @@
-package main
+package data
 
 import (
+	shared "chat-app-server/Shared"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,23 +12,17 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-type WsEvent struct {
-	Type    string `json:"action"`
-	Room_ID string `json:"room_id"`
-	Payload any    `json:"payload"`
-}
-
-func (app *App) addNewMessageToDB(ctx context.Context, message MessagePayload) (string, error) {
+func (db *DataStorage) AddNewMessageToDB(ctx context.Context, message shared.MessagePayload) (string, error) {
 	sql := fmt.Sprintf(`
         INSERT INTO %s.messages (id, content, user_id, room_id, created_at, updated_at)
         VALUES (@id, @content, @user_id, @room_id, @created_at, @updated_at)
         RETURNING id
-    `, pgx.Identifier{DBSchema}.Sanitize())
+    `, pgx.Identifier{db.schema}.Sanitize())
 
 	var id string
 	createdAt, _ := time.Parse(time.RFC3339, message.TimeStamp)
 
-	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := db.Db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"id":         message.Id,
 		"content":    message.Content,
 		"room_id":    message.Room_ID,
@@ -44,8 +39,8 @@ func (app *App) addNewMessageToDB(ctx context.Context, message MessagePayload) (
 	return fmt.Sprintf("%v", id), nil
 }
 
-func (app *App) addNewMessageToRedis(ctx context.Context, message MessagePayload) {
-	roomMessage := RoomMessage{
+func (db *DataStorage) AddNewMessageToRedis(ctx context.Context, message shared.MessagePayload) {
+	roomMessage := shared.RoomMessage{
 		Id:         message.Id,
 		Owner_name: message.UserName,
 		Room_ID:    message.Room_ID,
@@ -55,25 +50,25 @@ func (app *App) addNewMessageToRedis(ctx context.Context, message MessagePayload
 
 	key := fmt.Sprintf("room:%s:recent_messages", roomMessage.Room_ID)
 	msg, _ := json.Marshal(roomMessage)
-	app.redis_db.LPush(ctx, key, msg)
+	db.Redis_db.LPush(ctx, key, msg)
 
 	//Make sure to keep only 50 newest message
-	app.redis_db.LTrim(ctx, key, 0, 49)
+	db.Redis_db.LTrim(ctx, key, 0, 49)
 }
 
-func (app *App) editMessage(ctx context.Context, room_id string, message_id string, content string) error {
+func (db *DataStorage) EditMessage(ctx context.Context, room_id string, message_id string, content string) error {
 	//update in db
 	sql := fmt.Sprintf(`
         UPDATE %s.messages 
         SET content = @content, updated_at = @updated_at
         WHERE id = @id
         RETURNING id
-    `, pgx.Identifier{DBSchema}.Sanitize())
+    `, pgx.Identifier{db.schema}.Sanitize())
 
 	var id string
 	updated_at := time.Now()
 
-	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := db.Db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"id":         message_id,
 		"content":    content,
 		"updated_at": updated_at,
@@ -88,37 +83,38 @@ func (app *App) editMessage(ctx context.Context, room_id string, message_id stri
 
 	//delete redis
 	key := fmt.Sprintf("room:%s:recent_messages", room_id)
-	app.redis_db.Del(ctx, key)
+	db.Redis_db.Del(ctx, key)
 
-	payload := map[string]string{
-		"message_id": message_id,
-		"content":    content,
-	}
-
+	//TODO: MAKE MORE SENSE TO MOVE THIS TO WS HANDLER SO THAT WE CAN BROADCAST THE MESSAGE
+	// payload := map[string]string{
+	// 	"message_id": message_id,
+	// 	"content":    content,
+	// }
 	//broadcast to all users
-	responsePayload := &WsEvent{
-		Type:    "EDIT",
-		Room_ID: room_id,
-		Payload: payload,
-	}
-	jsonPayload, err := json.Marshal(responsePayload)
-	if err != nil {
-		log.Println("Error when marshalling payload: ", err)
-		return err
-	}
-	hub := app.hubManager.getHub(room_id)
-	hub.broadcaster <- jsonPayload
+	// responsePayload := &WsEvent{
+	// 	Type:    "EDIT",
+	// 	Room_ID: room_id,
+	// 	Payload: payload,
+	// }
+	// jsonPayload, err := json.Marshal(responsePayload)
+	// if err != nil {
+	// 	log.Println("Error when marshalling payload: ", err)
+	// 	return err
+	// }
+
+	// hub := hubManager.getHub(room_id)
+	// hub.broadcaster <- jsonPayload
 	return nil
 }
 
-func (app *App) deleteMessage(ctx context.Context, room_id string, message_id string) error {
+func (db *DataStorage) DeleteMessage(ctx context.Context, room_id string, message_id string) error {
 	//update in db
 	sql := fmt.Sprintf(`
         DELETE FROM %s.messages 
         WHERE id = @id
-    `, pgx.Identifier{DBSchema}.Sanitize())
+    `, pgx.Identifier{db.schema}.Sanitize())
 
-	_, err := app.db_pool.Exec(ctx, sql, pgx.NamedArgs{
+	_, err := db.Db_pool.Exec(ctx, sql, pgx.NamedArgs{
 		"id": message_id,
 	})
 
@@ -131,37 +127,39 @@ func (app *App) deleteMessage(ctx context.Context, room_id string, message_id st
 
 	//delete redis
 	key := fmt.Sprintf("room:%s:recent_messages", room_id)
-	app.redis_db.Del(ctx, key)
+	db.Redis_db.Del(ctx, key)
 
-	payload := map[string]string{
-		"message_id": message_id,
-	}
+	//TODO: MAKE MORE SENSE TO MOVE THIS TO WS HANDLER SO THAT WE CAN BROADCAST THE MESSAGE
 
-	//broadcast to all users
-	responsePayload := &WsEvent{
-		Type:    "DELETE",
-		Room_ID: room_id,
-		Payload: payload,
-	}
-	jsonPayload, err := json.Marshal(responsePayload)
-	if err != nil {
-		log.Println("Error when marshalling payload: ", err)
-		return err
-	}
-	hub := app.hubManager.getHub(room_id)
-	hub.broadcaster <- jsonPayload
+	// payload := map[string]string{
+	// 	"message_id": message_id,
+	// }
+
+	// //broadcast to all users
+	// responsePayload := &WsEvent{
+	// 	Type:    "DELETE",
+	// 	Room_ID: room_id,
+	// 	Payload: payload,
+	// }
+	// jsonPayload, err := json.Marshal(responsePayload)
+	// if err != nil {
+	// 	log.Println("Error when marshalling payload: ", err)
+	// 	return err
+	// }
+	// hub := db.hubManager.getHub(room_id)
+	// hub.broadcaster <- jsonPayload
 
 	return nil
 }
 
-func (app *App) addNewPendingMediaMessage(ctx context.Context, message_id string, message_type string, user_id string, room_id string, key string) (string, error) {
+func (db *DataStorage) AddNewPendingMediaMessage(ctx context.Context, message_id string, message_type string, user_id string, room_id string, key string) (string, error) {
 	sql := fmt.Sprintf(`
         INSERT INTO %s.messages (id, content, message_type, user_id, room_id)
         VALUES (@id, @content, @message_type, @user_id, @room_id)
         RETURNING id
-    `, pgx.Identifier{DBSchema}.Sanitize())
+    `, pgx.Identifier{db.schema}.Sanitize())
 
-	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := db.Db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"id":           message_id,
 		"content":      key,
 		"room_id":      room_id,
@@ -177,17 +175,17 @@ func (app *App) addNewPendingMediaMessage(ctx context.Context, message_id string
 	return fmt.Sprintf("%v", message_id), nil
 }
 
-func (app *App) updateMessageState(ctx context.Context, message_id string, state string) (string, error) {
+func (db *DataStorage) UpdateMessageState(ctx context.Context, message_id string, state string) (string, error) {
 	sql := fmt.Sprintf(`
         UPDATE %s.messages 
         SET state = @state
         WHERE id = @id
         RETURNING id
-    `, pgx.Identifier{DBSchema}.Sanitize())
+    `, pgx.Identifier{db.schema}.Sanitize())
 
 	id := ulid.Make().String()
 
-	err := app.db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
+	err := db.Db_pool.QueryRow(ctx, sql, pgx.NamedArgs{
 		"id":    message_id,
 		"state": state,
 	}).Scan(&id)
@@ -200,9 +198,9 @@ func (app *App) updateMessageState(ctx context.Context, message_id string, state
 	return fmt.Sprintf("%v", id), nil
 }
 
-func (app *App) generateResponsePayload(ctx context.Context, message_id string) (ResponseMessagePayload, error) {
-	messagesTable := pgx.Identifier{DBSchema, "messages"}.Sanitize()
-	usersTable := pgx.Identifier{DBSchema, "users"}.Sanitize()
+func (db *DataStorage) GenerateResponsePayload(ctx context.Context, message_id string) (shared.ResponseMessagePayload, error) {
+	messagesTable := pgx.Identifier{db.schema, "messages"}.Sanitize()
+	usersTable := pgx.Identifier{db.schema, "users"}.Sanitize()
 	sql := fmt.Sprintf(`
 		SELECT m.id, u.id, COALESCE(u.username, 'Unknown User'), m.room_id, m.content, m.created_at, m.message_type
 		FROM %s m
@@ -212,8 +210,8 @@ func (app *App) generateResponsePayload(ctx context.Context, message_id string) 
 	args := []interface{}{message_id}
 	var createdAt time.Time
 
-	var message ResponseMessagePayload
-	err := app.db_pool.QueryRow(ctx, sql, args...).Scan(
+	var message shared.ResponseMessagePayload
+	err := db.Db_pool.QueryRow(ctx, sql, args...).Scan(
 		&message.Id,
 		&message.User_ID,
 		&message.UserName,
@@ -223,7 +221,7 @@ func (app *App) generateResponsePayload(ctx context.Context, message_id string) 
 		&message.Message_Type,
 	)
 	if err != nil {
-		return ResponseMessagePayload{}, fmt.Errorf("Query failed: %w", err)
+		return shared.ResponseMessagePayload{}, fmt.Errorf("Query failed: %w", err)
 	}
 
 	message.OriginalId = message_id
