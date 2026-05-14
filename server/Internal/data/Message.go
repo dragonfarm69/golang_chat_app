@@ -84,26 +84,6 @@ func (db *DataStorage) EditMessage(ctx context.Context, room_id string, message_
 	//delete redis
 	key := fmt.Sprintf("room:%s:recent_messages", room_id)
 	db.Redis_db.Del(ctx, key)
-
-	//TODO: MAKE MORE SENSE TO MOVE THIS TO WS HANDLER SO THAT WE CAN BROADCAST THE MESSAGE
-	// payload := map[string]string{
-	// 	"message_id": message_id,
-	// 	"content":    content,
-	// }
-	//broadcast to all users
-	// responsePayload := &WsEvent{
-	// 	Type:    "EDIT",
-	// 	Room_ID: room_id,
-	// 	Payload: payload,
-	// }
-	// jsonPayload, err := json.Marshal(responsePayload)
-	// if err != nil {
-	// 	log.Println("Error when marshalling payload: ", err)
-	// 	return err
-	// }
-
-	// hub := hubManager.getHub(room_id)
-	// hub.broadcaster <- jsonPayload
 	return nil
 }
 

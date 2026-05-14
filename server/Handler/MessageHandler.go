@@ -21,6 +21,31 @@ type MessageHandler struct {
 	HubManager *app.HubManager
 }
 
+func (handler *MessageHandler) BroadCastEvent(message_id, room_id, content, event_type string) {
+	payload := map[string]string{
+		"message_id": message_id,
+		"content":    content,
+	}
+	// broadcast to all users
+	responsePayload := &shared.WsEvent{
+		Type:    event_type,
+		Room_ID: room_id,
+		Payload: payload,
+	}
+	jsonPayload, err := json.Marshal(responsePayload)
+	if err != nil {
+		log.Println("Error when marshalling payload: ", err)
+	}
+
+	hub := handler.HubManager.GetHub(room_id)
+	if hub == nil {
+		println("Hub not found")
+		return
+	}
+
+	hub.Broadcaster <- jsonPayload
+}
+
 func (handler *MessageHandler) HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		RoomId    string `json:"room_id"`
@@ -46,6 +71,8 @@ func (handler *MessageHandler) HandleEditMessage(w http.ResponseWriter, r *http.
 		http.Error(w, "Failed to edit message", http.StatusInternalServerError)
 		return
 	}
+
+	handler.BroadCastEvent(payload.MessageId, payload.RoomId, payload.Content, "EDIT")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -75,6 +102,8 @@ func (handler *MessageHandler) HandleDeleteMessage(w http.ResponseWriter, r *htt
 		http.Error(w, "Failed to delete message", http.StatusInternalServerError)
 		return
 	}
+
+	handler.BroadCastEvent(payload.MessageId, payload.RoomId, "", "DELETE")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
